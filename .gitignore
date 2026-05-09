@@ -1,0 +1,28 @@
+# Spike scaffolding (throwaway — Slice 0 artefact; delete via Task Manager)
+spike/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+
+# Next.js / build
+.next/
+dist/
+out/
+
+# Supabase CLI local cache
+.supabase/
+supabase/.temp/
+supabase/.branches/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

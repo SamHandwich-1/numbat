@@ -1,0 +1,81 @@
+import { z } from "zod";
+
+// sessions.last_error
+export const SessionLastError = z.object({
+  message: z.string(),
+  stack: z.string().optional(),
+  source: z.enum(["agent_sdk", "worker", "supabase", "validation"]),
+  occurred_at: z.string().datetime(),
+});
+
+// specs.files_affected
+export const SpecFilesAffected = z.array(
+  z.object({
+    path: z.string(),
+    status: z.enum(["created", "modified", "deleted", "renamed"]),
+    rename_from: z.string().optional(),
+  }),
+);
+
+// specs.acceptance_criteria
+export const SpecAcceptanceCriteria = z.array(
+  z.object({
+    id: z.string(),
+    text: z.string(),
+    satisfied: z.boolean().default(false),
+  }),
+);
+
+// specs.open_questions
+export const SpecOpenQuestions = z.array(
+  z.object({
+    id: z.string(),
+    question: z.string(),
+    raised_at: z.string().datetime(),
+    resolved: z.boolean().default(false),
+    resolution: z.string().optional(),
+  }),
+);
+
+// decisions.payload — discriminated union by decision type
+export const DecisionPayload = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("approve"), note: z.string().optional() }),
+  z.object({ type: z.literal("redirect"), reply_text: z.string() }),
+  z.object({ type: z.literal("kill"), reason: z.string() }),
+  z.object({ type: z.literal("accept_critique"), critique_id: z.string() }),
+  z.object({
+    type: z.literal("reject_critique"),
+    critique_id: z.string(),
+    reason: z.string(),
+  }),
+  z.object({ type: z.literal("ship"), spec_id: z.string() }),
+  z.object({ type: z.literal("edit_spec"), spec_id: z.string(), diff: z.string() }),
+]);
+
+// llm_calls.error — populated when a call failed
+export const LlmCallError = z.object({
+  message: z.string(),
+  subtype: z.string().optional(),         // 'error_during_execution', 'error_max_turns', etc.
+  terminal_reason: z.string().optional(),
+  errors: z.array(z.string()).optional(),
+});
+
+// plan_stages.content — discriminated union by action.
+// Permissive stub shapes for V1; Slice 6 (Bilby) tightens each variant
+// when the dialectic prompts are written.
+export const PlanStageContent = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("draft"), markdown: z.string() }),
+  z.object({ action: z.literal("critique"), markdown: z.string() }),
+  z.object({ action: z.literal("consider"), markdown: z.string() }),
+  z.object({ action: z.literal("validate"), markdown: z.string() }),
+  z.object({ action: z.literal("execute"), markdown: z.string() }),
+  z.object({ action: z.literal("debrief"), markdown: z.string() }),
+]);
+
+export type SessionLastErrorT = z.infer<typeof SessionLastError>;
+export type SpecFilesAffectedT = z.infer<typeof SpecFilesAffected>;
+export type SpecAcceptanceCriteriaT = z.infer<typeof SpecAcceptanceCriteria>;
+export type SpecOpenQuestionsT = z.infer<typeof SpecOpenQuestions>;
+export type DecisionPayloadT = z.infer<typeof DecisionPayload>;
+export type LlmCallErrorT = z.infer<typeof LlmCallError>;
+export type PlanStageContentT = z.infer<typeof PlanStageContent>;

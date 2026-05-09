@@ -1,0 +1,27 @@
+{
+  "name": "numbat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Single-operator control surface for orchestrating Claude Agent SDK sessions across multiple codebases.",
+  "scripts": {
+    "db:push": "supabase db push",
+    "db:seed": "tsx lib/supabase/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "echo \"lint placeholder — wired up in Slice 2 when the first Next.js code lands\""
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "supabase": "^1.200.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
