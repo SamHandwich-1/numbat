@@ -1,3 +1,4 @@
 allowBuilds:
   esbuild: true
   supabase: true
+  sharp: true
