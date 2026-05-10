@@ -1,0 +1,110 @@
+/* Slice 2a — design tokens, theme mappings, status tokens, motion.
+ * Source of truth: docs/slice-2a-plan.md §2.
+ * All token additions or remappings must go through the plan first. */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  /* ────────────────────────────────────────────────────────────────
+   * Raw Numbat tokens (11) — brief palette + bridge tokens.
+   * Authoritative. shadcn aliases below resolve to these via var().
+   * ──────────────────────────────────────────────────────────────── */
+
+  /* Surfaces & text */
+  --color-base: #0d0c0b;                /* warm-dark page background */
+  --color-fg: #ece5d8;                  /* warm cream foreground */
+  --color-fg-dim: #6b6358;              /* dimmed off-project, idle, terminal-state glyphs */
+  --color-surface-raised: #1a1816;      /* raised surfaces — pills, dropdowns, cards */
+  --color-border-hairline: #2a2622;     /* subtle borders & separators */
+  --color-destructive-action: #c46060;  /* intent-to-act red — kill buttons (slice 3+) */
+
+  /* Status colours (brief §6) */
+  --color-mint: #7ed4c6;                /* running */
+  --color-amber: #e0a04b;                /* awaiting */
+  --color-coral: #c87f7f;                /* blocked */
+
+  /* Bilby surface accents (consumed slices 5–6) */
+  --color-opus: #b094d6;                 /* Opus violet */
+  --color-grok: #d6c890;                 /* Grok yellow */
+
+  /* ────────────────────────────────────────────────────────────────
+   * shadcn → Numbat alias bridge (19) — must match
+   * docs/slice-2a-plan.md §2 bridge table 1:1. Brief tokens are
+   * authoritative; shadcn tokens are aliases that resolve to them.
+   * ──────────────────────────────────────────────────────────────── */
+
+  --color-background: var(--color-base);
+  --color-foreground: var(--color-fg);
+
+  --color-card: var(--color-surface-raised);
+  --color-card-foreground: var(--color-fg);
+
+  --color-popover: var(--color-base);
+  --color-popover-foreground: var(--color-fg);
+
+  --color-primary: var(--color-mint);
+  --color-primary-foreground: var(--color-base);
+
+  --color-secondary: var(--color-surface-raised);
+  --color-secondary-foreground: var(--color-fg);
+
+  --color-muted: var(--color-surface-raised);
+  --color-muted-foreground: var(--color-fg-dim);
+
+  --color-accent: var(--color-surface-raised);
+  --color-accent-foreground: var(--color-fg);
+
+  --color-destructive: var(--color-destructive-action);
+  --color-destructive-foreground: var(--color-fg);
+
+  --color-border: var(--color-border-hairline);
+  --color-input: var(--color-border-hairline);
+  --color-ring: var(--color-mint);
+
+  /* ────────────────────────────────────────────────────────────────
+   * Status tokens (7) — consumed directly by SessionCard (step 9)
+   * via var(--status-*). Not used for utility class generation;
+   * components read them inline.
+   *
+   * done/killed render glyphs (✓/×) instead of dots per §2; the
+   * token still resolves to fg-dim so the glyph has fill.
+   * ──────────────────────────────────────────────────────────────── */
+
+  --status-running: var(--color-mint);
+  --status-awaiting-review: var(--color-amber);
+  --status-blocked: var(--color-coral);
+  --status-idle: var(--color-fg-dim);
+  --status-planning: var(--color-fg-dim);
+  --status-done: var(--color-fg-dim);
+  --status-killed: var(--color-fg-dim);
+
+  /* ────────────────────────────────────────────────────────────────
+   * Typography — next/font/google in app/layout.tsx (step 5) sets
+   * --font-instrument-serif and --font-jetbrains-mono on <html>.
+   * @theme aliases them to --font-display and --font-mono so the
+   * Tailwind font-display and font-mono utilities resolve correctly.
+   *
+   * Distinct variable names (not just "--font-display" reused on
+   * both ends) avoid a self-referential var() loop on :root.
+   * ──────────────────────────────────────────────────────────────── */
+
+  --font-display: var(--font-instrument-serif), serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Motion — running-status pulse only.
+ * SessionCard (step 9) applies .status-dot--pulse to the status dot
+ * iff status === "running". 1.6s loop is calm enough to avoid
+ * visual fatigue across 5–10 simultaneous running sessions.
+ * ──────────────────────────────────────────────────────────────── */
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+.status-dot--pulse {
+  animation: status-pulse 1.6s ease-in-out infinite;
+}
