@@ -55,6 +55,7 @@ Five layers:
 - Load project context via `ContextLoader` at every session and plan-stage boundary. Never reach across projects.
 - Apply migrations via `supabase/migrations/<NNNN>_<name>.sql` (Supabase CLI convention). One numbered SQL file per slice that touches the schema. `pnpm db:push` reads from there.
 - For Agent SDK session results: fan out `llm_calls` one row per (session, model) via `lib/supabase/llm-calls.ts:insertLlmCallsFromModelUsage`. Trust the SDK's per-model `costUSD` and `total_cost_usd` — no maintained price table for the Agent SDK path. (Bilby's direct Anthropic / xAI calls via the AI SDK still need one.)
+- For Tailwind v4 `@theme` tokens, use single-component names after the namespace (`--status-review`, not `--status-awaiting-review`). Tailwind v4's parser interprets a second hyphen after the namespace as a modifier separator — multi-hyphen tokens compile to nothing silently. Discovered during slice 2a step 5 visual check. The `STATUS_TO_TOKEN` map in `lib/types/ui.ts` isolates the workaround.
 
 ## Never
 
@@ -91,3 +92,5 @@ Five layers:
 ## When in doubt
 
 Read the spec for the current slice. If the spec doesn't answer the question, surface it as an Open Question in the debrief rather than guessing.
+
+If a Tailwind v4 utility class isn't applying or a `@theme` token isn't compiling, suspect the parser quirk first. Curl the compiled `_next/static/css/app/layout.css` and grep for the token — if it's missing, the name is the issue.
