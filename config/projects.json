@@ -1,0 +1,30 @@
+[
+  {
+    "slug": "alice-os",
+    "name": "Alice OS",
+    "short_code": "AO",
+    "repo_path": "C:/Users/James/alice-os/",
+    "claude_md": null
+  },
+  {
+    "slug": "wedgetail",
+    "name": "Wedgetail",
+    "short_code": "WT",
+    "repo_path": "C:/Users/James/wedgetail/",
+    "claude_md": null
+  },
+  {
+    "slug": "bowerbird",
+    "name": "Bowerbird",
+    "short_code": "BB",
+    "repo_path": "C:/Users/James/bowerbird/",
+    "claude_md": null
+  },
+  {
+    "slug": "numbat",
+    "name": "Numbat",
+    "short_code": "NB",
+    "repo_path": "C:/Users/James/numbat/",
+    "claude_md": null
+  }
+]

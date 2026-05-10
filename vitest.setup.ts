@@ -1,3 +1,1 @@
-import { config } from "dotenv";
-
-config({ path: ".env.local" });
+import "@/lib/env";

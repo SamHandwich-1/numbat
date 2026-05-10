@@ -1,6 +1,6 @@
 # Numbat — Claude Code Brief
 
-> **Status:** Final, post Stage 4 validation. READY to ship.
+> **Status:** Slices 0 and 1 closed. Slice 0 SDK spike memo at `docs/sdk-spike.md`; Slice 1 schema + data layer plan at `docs/slice-1-plan.md`. Slice 2 planning is the next session.
 > **Dialectic trail:** `/docs/numbat-bootstrap-dialectic.md`.
 > **Last revised:** 9 May 2026.
 
@@ -117,7 +117,7 @@ create table projects (
   id uuid primary key default gen_random_uuid(),
   slug text unique not null,
   name text not null,
-  short_code text not null,            -- 'DS', 'MH', 'AL', 'NB'
+  short_code text not null,            -- 'AO', 'WT', 'BB', 'NB'
   repo_path text not null,             -- absolute path on dev machine
   claude_md text,                      -- the project's CLAUDE.md content
   created_at timestamptz default now()
@@ -299,7 +299,9 @@ numbat/
 │   ├── supabase/
 │   │   ├── client.ts
 │   │   ├── server.ts
-│   │   └── migrations/
+│   │   ├── llm-calls.ts            # insertLlmCallsFromModelUsage (fan-out)
+│   │   ├── seed.ts
+│   │   └── test-fixtures.ts
 │   ├── feathertail/              # execution layer (worktrees + Agent SDK)
 │   │   ├── worktree.ts           # git worktree create/list/cleanup
 │   │   ├── agent-sdk.ts          # @anthropic-ai/claude-agent-sdk wrapper
@@ -332,6 +334,9 @@ numbat/
 ├── docs/
 │   └── numbat-bootstrap-dialectic.md
 ├── public/
+├── supabase/                     # Supabase CLI convention (project-local)
+│   ├── config.toml               # `supabase init` output
+│   └── migrations/               # 0001_initial.sql, etc.
 ├── CLAUDE.md
 ├── README.md
 ├── package.json
@@ -385,6 +390,8 @@ Five layers: Interface → Orchestration (Router, State Custodian, Escalation, C
 - Use Supabase realtime for any UI showing session/plan state. Never poll.
 - Log every LLM call to `llm_calls` (model, prompt hash, tokens, duration, cost, error).
 - Load project context via `ContextLoader` at every session/plan-stage boundary. Never reach across projects.
+- Apply migrations via `supabase/migrations/<NNNN>_<name>.sql` (Supabase CLI convention). One numbered SQL file per slice that touches the schema.
+- For Agent SDK session results: fan out `llm_calls` one row per (session, model) via `lib/supabase/llm-calls.ts:insertLlmCallsFromModelUsage`. Trust the SDK's per-model `costUSD` and `total_cost_usd` — no maintained price table for the Agent SDK path. (Bilby's direct Anthropic / xAI calls still need one.)
 
 ## Never
 - Never commit secrets. `.env.local` and OS keychain only.
@@ -393,6 +400,7 @@ Five layers: Interface → Orchestration (Router, State Custodian, Escalation, C
 - Never expose `service_role` Supabase key to the client.
 - Never ship a session that hasn't recorded its triggering decision in the `decisions` table.
 - Never share LLM history across projects. Each session/plan stage gets fresh context.
+- Never reconstruct review diffs from SDK `tool_use` events alone — those are intent, not ground truth. Final diff = `git status --porcelain` + `git diff` inside the session's `cwd` (see `lib/feathertail/diff.ts`). `tool_use` events drive only the in-progress UI indicator.
 
 ## Resilience
 - LLM call timeouts: Opus draft 90s, Grok critique 60s, Opus considered 90s, Grok validate 60s, Opus debrief 60s. Agent SDK sessions: no timeout (kill via signal only).
@@ -419,7 +427,7 @@ Read the spec for the current slice. If it doesn't answer the question, surface 
 
 ## 10 · Project context loading (the ContextLoader contract)
 
-Project context is a runtime concern, not just a data-model fact. Without explicit boundaries, signal from one project bleeds into another — brand voice rules from Departed Spirits influencing Men's Health work, decisions-log patterns from one codebase polluting the router for another. The `ContextLoader` (`lib/orchestration/context.ts`) is the single place that assembles context, and the contract is strict.
+Project context is a runtime concern, not just a data-model fact. Without explicit boundaries, signal from one project bleeds into another — Wedgetail's valuation heuristics leaking into Bowerbird's spending analysis, decisions-log patterns from one codebase polluting the router for another. The `ContextLoader` (`lib/orchestration/context.ts`) is the single place that assembles context, and the contract is strict.
 
 ### Three scopes
 
@@ -487,16 +495,16 @@ If the memo reveals surprises, this brief is updated before Slice 1. If it confi
 **Goal:** All Supabase tables exist, all TypeScript types derived, Supabase client utilities work, projects seeded, `ContextLoader` skeleton in place.
 
 **Files affected:**
-- `lib/supabase/migrations/0001_initial.sql` — full schema from section 7.
+- `supabase/migrations/0001_initial.sql` — full schema from section 7.
 - `lib/supabase/client.ts`, `lib/supabase/server.ts`.
 - `lib/types/db.ts` — generated types.
 - `lib/orchestration/context.ts` — `ContextLoader` class, methods stubbed but with `project_id` enforcement.
-- `config/projects.json` — seed: Departed Spirits, Men's Health, Aluna, Numbat.
+- `config/projects.json` — seed: Alice OS, Wedgetail, Bowerbird, Numbat.
 - `lib/supabase/seed.ts`.
 
 **Acceptance:**
 - `pnpm db:push` applies the migration cleanly.
-- `pnpm db:seed` populates four projects with correct `short_code` (DS, MH, AL, NB).
+- `pnpm db:seed` populates four projects with correct `short_code` (AO, WT, BB, NB).
 - Round-trip: insert a session, query via typed client, types compile.
 - All jsonb fields have matching Zod schemas in `lib/types/`.
 - `ContextLoader.buildFor('project_a_id')` throws if asked to read project_b's tables.

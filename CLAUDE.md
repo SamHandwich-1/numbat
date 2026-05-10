@@ -53,6 +53,8 @@ Five layers:
 - Use Supabase realtime for any UI showing session or plan state. Never poll.
 - Log every LLM call to `llm_calls` (model, prompt hash, tokens, duration, cost, error).
 - Load project context via `ContextLoader` at every session and plan-stage boundary. Never reach across projects.
+- Apply migrations via `supabase/migrations/<NNNN>_<name>.sql` (Supabase CLI convention). One numbered SQL file per slice that touches the schema. `pnpm db:push` reads from there.
+- For Agent SDK session results: fan out `llm_calls` one row per (session, model) via `lib/supabase/llm-calls.ts:insertLlmCallsFromModelUsage`. Trust the SDK's per-model `costUSD` and `total_cost_usd` — no maintained price table for the Agent SDK path. (Bilby's direct Anthropic / xAI calls via the AI SDK still need one.)
 
 ## Never
 
@@ -62,6 +64,7 @@ Five layers:
 - Never expose `service_role` Supabase key to the client. Anon key only on the browser.
 - Never ship a session that hasn't recorded its triggering decision in the `decisions` table.
 - Never share LLM history across projects. Each session and plan stage gets fresh context.
+- Never reconstruct review diffs from SDK `tool_use` events alone — those are intent, not ground truth. Final diff = `git status --porcelain` + `git diff` inside the session's `cwd` (see `lib/feathertail/diff.ts`). `tool_use` events drive only the in-progress UI indicator.
 
 ## Resilience
 
