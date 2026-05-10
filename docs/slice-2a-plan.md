@@ -100,7 +100,7 @@ Listed in build order. Existing files (`package.json`, `tsconfig.json`, `lib/sup
 
 **`next.config.mjs` — minimal.** `reactStrictMode: true`, `experimental: { typedRoutes: true }`. No image domains, no rewrites, no headers.
 
-**Font loading via `next/font/google`.** `Instrument_Serif` (display, italic + normal weight 400) and `JetBrains_Mono` (weights 400/500/700). Both expose CSS variables (`--font-display`, `--font-mono`) on `<html>`, referenced from the `@theme` block in `globals.css`. Self-hosted by `next/font` — no external CSS request, no FOUT.
+**Font loading via `next/font/google`.** `Instrument_Serif` (italic + normal, weight 400) and `JetBrains_Mono` (weights 400/500/700). next/font is configured with `variable: "--font-instrument-serif"` and `variable: "--font-jetbrains-mono"` (raw CSS variables set on `<html>`); `globals.css` `@theme` aliases these to `--font-display` and `--font-mono` (the Tailwind utility tokens). Distinct variable names on each end avoid a self-referential `var()` loop on `:root`. Self-hosted by `next/font` — no external CSS request, no FOUT.
 
 **shadcn flow.** `pnpm dlx shadcn@latest init` after Tailwind is wired, then `pnpm dlx shadcn@latest add badge select card`. Generates `components.json`, `lib/utils.ts`, `components/ui/*`. Aliases match the project's `@/` path.
 
@@ -135,7 +135,9 @@ Status colours are reserved as attention signals. Mint = running (live), coral =
 | `done` | no dot | render a small ✓ glyph in `--color-fg-dim` instead |
 | `killed` | no dot | render a small × glyph in `--color-fg-dim` instead |
 
-Concrete vars: `--status-running`, `--status-awaiting_review`, `--status-blocked`, `--status-idle`, `--status-planning`, `--status-done`, `--status-killed`.
+Concrete vars: `--status-running`, `--status-review`, `--status-blocked`, `--status-idle`, `--status-planning`, `--status-done`, `--status-killed`.
+
+**Token naming quirk (post-implementation finding).** Tailwind v4's `@theme` parser treats double-hyphens after the namespace prefix as modifier separators — the same pattern as `--text-2xl--line-height` being a sub-property of `--text-2xl`. As a result `--status-awaiting-review` compiled to nothing; the second hyphen made the parser silently drop the token. The fix is the shorter name `--status-review`. The DB enum value `awaiting_review` is bridged to it via the `STATUS_TO_TOKEN` map in `lib/types/ui.ts`. Do not rename `--status-review` back to `--status-awaiting-review` without re-testing compilation.
 
 **Pulse animation** in `globals.css`:
 ```css

@@ -69,10 +69,17 @@
    *
    * done/killed render glyphs (✓/×) instead of dots per §2; the
    * token still resolves to fg-dim so the glyph has fill.
+   *
+   * `--status-review` (not `--status-awaiting-review`): Tailwind v4's
+   * @theme parser silently drops tokens whose names contain two
+   * hyphens after the namespace (the second hyphen reads as a
+   * modifier separator, like --text-2xl--line-height). The DB enum
+   * value `awaiting_review` is bridged to `--status-review` via
+   * STATUS_TO_TOKEN in lib/types/ui.ts.
    * ──────────────────────────────────────────────────────────────── */
 
   --status-running: var(--color-mint);
-  --status-awaiting-review: var(--color-amber);
+  --status-review: var(--color-amber);
   --status-blocked: var(--color-coral);
   --status-idle: var(--color-fg-dim);
   --status-planning: var(--color-fg-dim);

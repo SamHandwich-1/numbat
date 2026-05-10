@@ -37,3 +37,18 @@ export const PROJECT_CHIP_COLORS: Record<
 export function isProjectShortCode(s: string): s is ProjectShortCode {
   return s === "AO" || s === "WT" || s === "BB" || s === "NB";
 }
+
+// Tailwind v4's @theme parser treats double-hyphens as modifier
+// separators, so --status-awaiting-review compiled to nothing. Hence
+// --status-review with explicit DB enum → token mapping. Do not
+// rename status-review to status-awaiting-review without testing
+// compilation.
+export const STATUS_TO_TOKEN: Record<SessionStatus, string> = {
+  idle: "--status-idle",
+  planning: "--status-planning",
+  running: "--status-running",
+  awaiting_review: "--status-review",
+  blocked: "--status-blocked",
+  done: "--status-done",
+  killed: "--status-killed",
+};
