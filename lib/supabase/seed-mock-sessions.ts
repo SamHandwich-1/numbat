@@ -1,6 +1,7 @@
 // Slice 2a — seed plausible mock sessions across the four projects.
-// Idempotent: deletes rows where slice_name LIKE 'mock-%' before inserting,
-// so re-running wipes only mocks. Real sessions (slice 4+) won't match.
+// Idempotent: before inserting, deletes rows where slice_name LIKE 'mock-%'
+// (this script's prior outputs) or LIKE 'fixture-%' (slice 1 test crud).
+// Re-running wipes only those; real sessions (slice 4+) won't match.
 //
 // Mock session #10 ("ship slice 2a (this!)") is a self-referential seed
 // used during 2a development. Delete this row from the array once 2a
@@ -184,12 +185,43 @@ async function main(): Promise<void> {
     }
   }
 
-  // 2. Wipe existing mock rows. The marker prefix isolates this from any
-  //    real sessions — slice 4+ won't use 'mock-' slice names.
+  // 2. Wipe existing mock rows AND any leftover fixture rows from slice 1's
+  //    tests. Both prefixes are isolated from real sessions — slice 4+
+  //    won't use 'mock-' or 'fixture-' slice names.
+  //
+  //    Two-step because llm_calls.session_id is not ON DELETE CASCADE:
+  //    find the doomed session IDs first, wipe their dependent llm_calls,
+  //    then wipe the sessions themselves.
+  const wipeFilter = `slice_name.like.${MARKER_PREFIX}%,slice_name.like.fixture-%`;
+  const { data: doomed, error: findError } = await sbAdmin
+    .from("sessions")
+    .select("id")
+    .or(wipeFilter);
+  if (findError) {
+    console.error(
+      "seed-mock-sessions: failed to enumerate doomed sessions:",
+      findError.message,
+    );
+    process.exit(1);
+  }
+  const doomedIds = (doomed ?? []).map((r) => r.id);
+  if (doomedIds.length > 0) {
+    const { error: deleteLlmError } = await sbAdmin
+      .from("llm_calls")
+      .delete()
+      .in("session_id", doomedIds);
+    if (deleteLlmError) {
+      console.error(
+        "seed-mock-sessions: failed to delete dependent llm_calls:",
+        deleteLlmError.message,
+      );
+      process.exit(1);
+    }
+  }
   const { error: deleteError } = await sbAdmin
     .from("sessions")
     .delete()
-    .like("slice_name", `${MARKER_PREFIX}%`);
+    .or(wipeFilter);
   if (deleteError) {
     console.error(
       "seed-mock-sessions: failed to delete previous mocks:",
