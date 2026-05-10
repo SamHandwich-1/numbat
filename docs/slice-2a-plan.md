@@ -98,7 +98,7 @@ Listed in build order. Existing files (`package.json`, `tsconfig.json`, `lib/sup
 
 **Versions.** Next 15 latest stable, React 19 latest stable, Tailwind 4 latest stable. Caret ranges (`^15`, `^19`, `^4`).
 
-**`next.config.mjs` — minimal.** `reactStrictMode: true`, `experimental: { typedRoutes: true }`. No image domains, no rewrites, no headers.
+**`next.config.mjs` — minimal.** `reactStrictMode: true`, `typedRoutes: true`. No image domains, no rewrites, no headers. (Next 15.5 promoted `typedRoutes` out of `experimental`; the original draft used the experimental key.)
 
 **Font loading via `next/font/google`.** `Instrument_Serif` (italic + normal, weight 400) and `JetBrains_Mono` (weights 400/500/700). next/font is configured with `variable: "--font-instrument-serif"` and `variable: "--font-jetbrains-mono"` (raw CSS variables set on `<html>`); `globals.css` `@theme` aliases these to `--font-display` and `--font-mono` (the Tailwind utility tokens). Distinct variable names on each end avoid a self-referential `var()` loop on `:root`. Self-hosted by `next/font` — no external CSS request, no FOUT.
 
