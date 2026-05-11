@@ -187,41 +187,13 @@ async function main(): Promise<void> {
 
   // 2. Wipe existing mock rows AND any leftover fixture rows from slice 1's
   //    tests. Both prefixes are isolated from real sessions — slice 4+
-  //    won't use 'mock-' or 'fixture-' slice names.
-  //
-  //    Two-step because llm_calls.session_id is not ON DELETE CASCADE:
-  //    find the doomed session IDs first, wipe their dependent llm_calls,
-  //    then wipe the sessions themselves.
-  const wipeFilter = `slice_name.like.${MARKER_PREFIX}%,slice_name.like.fixture-%`;
-  const { data: doomed, error: findError } = await sbAdmin
-    .from("sessions")
-    .select("id")
-    .or(wipeFilter);
-  if (findError) {
-    console.error(
-      "seed-mock-sessions: failed to enumerate doomed sessions:",
-      findError.message,
-    );
-    process.exit(1);
-  }
-  const doomedIds = (doomed ?? []).map((r) => r.id);
-  if (doomedIds.length > 0) {
-    const { error: deleteLlmError } = await sbAdmin
-      .from("llm_calls")
-      .delete()
-      .in("session_id", doomedIds);
-    if (deleteLlmError) {
-      console.error(
-        "seed-mock-sessions: failed to delete dependent llm_calls:",
-        deleteLlmError.message,
-      );
-      process.exit(1);
-    }
-  }
+  //    won't use 'mock-' or 'fixture-' slice names. Dependent llm_calls
+  //    cascade away — migration 0002 added ON DELETE CASCADE to
+  //    llm_calls.session_id, matching the existing project_id cascade.
   const { error: deleteError } = await sbAdmin
     .from("sessions")
     .delete()
-    .or(wipeFilter);
+    .or(`slice_name.like.${MARKER_PREFIX}%,slice_name.like.fixture-%`);
   if (deleteError) {
     console.error(
       "seed-mock-sessions: failed to delete previous mocks:",
