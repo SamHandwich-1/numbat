@@ -9,23 +9,13 @@
 //
 // Delete this route (and the parent `app/dev/` folder if it ends up
 // the only thing there) once chip colours are locked in.
+import { ProjectChip } from "@/components/sessions/project-chip";
 import { listProjects } from "@/lib/supabase/queries/sessions";
 
 // Bypass the RSC cache so edits to config/projects.json + a re-seed
 // show up on next reload without restarting dev. The route's purpose
 // is to reflect the live DB; static rendering defeats that.
 export const dynamic = "force-dynamic";
-
-function Chip({ code, bg, fg }: { code: string; bg: string; fg: string }) {
-  return (
-    <span
-      className="rounded-md px-1.5 py-0.5 text-xs font-mono uppercase tracking-wider"
-      style={{ backgroundColor: bg, color: fg }}
-    >
-      {code}
-    </span>
-  );
-}
 
 export default async function ChipPreviewPage() {
   const projects = await listProjects();
@@ -46,7 +36,7 @@ export default async function ChipPreviewPage() {
                 On page bg (--color-base)
               </div>
               <div className="bg-background p-6 rounded-md border border-border flex items-center gap-3">
-                <Chip code={p.short_code} bg={p.chip_bg} fg={p.chip_fg} />
+                <ProjectChip project={p} />
                 <span className="font-mono text-sm text-foreground">
                   {p.slug}
                 </span>
@@ -58,7 +48,7 @@ export default async function ChipPreviewPage() {
                 On card bg (--color-surface-raised)
               </div>
               <div className="bg-card p-6 rounded-md border border-border flex items-center gap-3">
-                <Chip code={p.short_code} bg={p.chip_bg} fg={p.chip_fg} />
+                <ProjectChip project={p} />
                 <span className="font-mono text-sm text-card-foreground">
                   {p.slug}
                 </span>
