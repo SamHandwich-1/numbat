@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { SessionLastError } from "@/lib/types/jsonb";
 import type { SessionLastErrorT } from "@/lib/types/jsonb";
 
@@ -7,6 +7,24 @@ const haveCreds =
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 describe.skipIf(!haveCreds)("sessions round-trip (live DB)", () => {
+  // Track every project this suite inserts so afterEach can wipe them.
+  // Project deletion cascades to its sessions (and any llm_calls), so
+  // one delete cleans up everything this test created.
+  const insertedProjectIds: string[] = [];
+
+  afterEach(async () => {
+    if (insertedProjectIds.length === 0) return;
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { error } = await sbAdmin
+      .from("projects")
+      .delete()
+      .in("id", insertedProjectIds);
+    if (error) {
+      console.error("sessions.test cleanup failed:", error.message);
+    }
+    insertedProjectIds.length = 0;
+  });
+
   test("insert + query: typed client compiles, last_error survives Zod round-trip", async () => {
     const { sbAdmin } = await import("@/lib/supabase/server");
     const { insertProjectFixture } = await import(
@@ -14,6 +32,7 @@ describe.skipIf(!haveCreds)("sessions round-trip (live DB)", () => {
     );
 
     const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
 
     const lastError: SessionLastErrorT = {
       message: "fixture: agent SDK subprocess crashed",

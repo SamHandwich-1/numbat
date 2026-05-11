@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 
 // Live-DB tests. Skip cleanly when env vars are missing so `pnpm test`
 // stays green offline and only exercises the round-trip when the user
@@ -8,6 +8,25 @@ const haveCreds =
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 describe.skipIf(!haveCreds)("llm_calls fan-out (live DB)", () => {
+  // Track every project this suite inserts so afterEach can wipe them.
+  // Deleting a project cascades to its sessions and llm_calls
+  // (both have project_id ON DELETE CASCADE), so one delete cleans up
+  // the whole tree this test created.
+  const insertedProjectIds: string[] = [];
+
+  afterEach(async () => {
+    if (insertedProjectIds.length === 0) return;
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { error } = await sbAdmin
+      .from("projects")
+      .delete()
+      .in("id", insertedProjectIds);
+    if (error) {
+      console.error("llm-calls.test cleanup failed:", error.message);
+    }
+    insertedProjectIds.length = 0;
+  });
+
   test("one Agent SDK session writes one llm_calls row per model; sums match total_cost_usd", async () => {
     // Dynamic imports so the test file loads even when credentials are absent.
     const { sbAdmin } = await import("@/lib/supabase/server");
@@ -19,6 +38,7 @@ describe.skipIf(!haveCreds)("llm_calls fan-out (live DB)", () => {
     );
 
     const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
     const session_id = await insertSessionFixture(sbAdmin, { project_id });
 
     // Mock SDKResultSuccess.modelUsage shape: Haiku (router) + Opus (response).
