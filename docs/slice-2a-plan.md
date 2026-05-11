@@ -36,7 +36,7 @@ User decisions confirmed before writing:
 - `components/shared/cost-badge.tsx` — client wrapper; owns realtime subscription on `llm_calls`.
 - `lib/supabase/queries/sessions.ts` — server-only typed queries: `listSessions`, `listProjects`, `getTodayCostUsd`.
 - `lib/supabase/seed-mock-sessions.ts` — idempotent script to populate plausible sessions across the four projects, hitting every status.
-- `lib/types/ui.ts` — `SessionFilters` type and `PROJECT_CHIP_COLORS` constant keyed by `short_code`.
+- `lib/types/ui.ts` — `SessionFilters` type and `STATUS_TO_TOKEN` map. Chip colours read from `chip_bg` / `chip_fg` per project row, seeded from `config/projects.json` (see §10.5).
 - `package.json` script additions: `dev`, `build`, `start`, real `lint` (replacing placeholder), `db:seed:sessions`.
 - ESLint config (`eslint.config.mjs`) extending `next/core-web-vitals` and `next/typescript`. Includes `no-restricted-imports` rule blocking `@/lib/supabase/server` from `components/**/*.tsx`.
 - One new test: `lib/supabase/queries/sessions.test.ts` — round-trip with filter (skipped when DB env missing, same gate as Slice 1's tests).
@@ -76,13 +76,13 @@ Listed in build order. Existing files (`package.json`, `tsconfig.json`, `lib/sup
 | 10 | `components/ui/badge.tsx` | shadcn-generated. |
 | 11 | `components/ui/select.tsx` | shadcn-generated. |
 | 12 | `components/ui/card.tsx` | shadcn-generated. |
-| 13 | `lib/types/ui.ts` | `SessionFilters` type. `PROJECT_CHIP_COLORS` map keyed by `short_code` ('AO', 'WT', 'BB', 'NB'). See specifics §2. |
+| 13 | `lib/types/ui.ts` | `SessionFilters` type and `STATUS_TO_TOKEN` (DB enum → CSS var) map. Chip colours moved to per-project row data in slice 2a.1 — see §10.5. |
 | 14 | `app/layout.tsx` | Root layout. Loads Instrument Serif + JetBrains Mono via `next/font/google`. Sets `<html lang="en" class="dark">`, top bar with `<CostBadge initialUsd={...} />`, renders `{children}`. Cost badge lives here so it survives navigation. |
 | 15 | `app/page.tsx` | `redirect('/sessions')`. |
 | 16 | `lib/supabase/queries/sessions.ts` | Server-only. `listSessions(filters)`, `listProjects()`, `getTodayCostUsd()`. See specifics §6. |
 | 17 | `lib/supabase/seed-mock-sessions.ts` | Idempotent. Deletes `where slice_name like 'mock-%'`, then inserts 12 mock sessions across all 4 projects, hitting every status. See specifics §7. |
 | 18 | `components/shared/cost-badge.tsx` | `"use client"`. Subscribes to `llm_calls` realtime via anon `sb`. See specifics §8. |
-| 19 | `components/sessions/project-chip.tsx` | Server-renderable. Reads `PROJECT_CHIP_COLORS[shortCode]`. |
+| 19 | `components/sessions/project-chip.tsx` | Server-renderable. Reads `chip_bg` / `chip_fg` from its `Project` prop. |
 | 20 | `components/sessions/session-card.tsx` | Server-renderable. Status dot from CSS var `--status-<status>`. Mint pulse class only when `running`. Shows `last_error.message` preview if blocked. |
 | 21 | `components/sessions/project-filter.tsx` | `"use client"`. Reads `useSearchParams()`, writes `router.replace('?project=...')`. |
 | 22 | `components/sessions/status-filter.tsx` | `"use client"`. Same shape, `?status=`. Options match `SessionStatus` enum. |
@@ -148,16 +148,7 @@ Concrete vars: `--status-running`, `--status-review`, `--status-blocked`, `--sta
 .status-dot--pulse { animation: status-pulse 1.6s ease-in-out infinite; }
 ```
 
-**Project chip colors — TS constants in `lib/types/ui.ts`.** Project short_codes are data (sourced from `config/projects.json`); their associated chip color is a per-project attribute, not a global token. Storing in TS keeps the four entries versioned alongside the four projects that consume them. Distinct from reserved status colors and from Opus/Grok accents.
-
-```ts
-export const PROJECT_CHIP_COLORS: Record<string, { bg: string; fg: string }> = {
-  AO: { bg: "#3b4a4f", fg: "#cfe6e8" },  // alice-os — desaturated teal
-  WT: { bg: "#4a3a2c", fg: "#e6d3b8" },  // wedgetail — warm umber
-  BB: { bg: "#3d3a4a", fg: "#cdc6e0" },  // bowerbird — dim plum
-  NB: { bg: "#2c3e3a", fg: "#bcd0c7" },  // numbat — forest moss
-};
-```
+**Project chip colours — per-project row data on `projects` (`chip_bg`, `chip_fg`).** Each project carries its own chip colour pair, seeded from `config/projects.json` via `pnpm db:seed`. The Sessions surface and (slice 5+) the Plans surface read the values straight off the project row. Distinct from reserved status colours and from Opus/Grok accents — the chip family stays in warm-dark tones; contrast is the operator's responsibility. See §10.5 for the rationale behind storing chips as row data rather than as a typed constant.
 
 **shadcn → Numbat token bridge.** shadcn's generated primitives (`badge.tsx`, `select.tsx`, `card.tsx`) reference Tailwind/shadcn-conventional tokens (`--color-primary`, `--color-card`, `--color-popover`, etc.) that aren't part of the brief's palette. The `@theme` block in `globals.css` aliases these to brief tokens via `var()` references — brief tokens are authoritative; shadcn tokens resolve to them. The two new raw tokens above (`--color-surface-raised`, `--color-border-hairline`) exist to satisfy this bridge — neither is in the brief, but both are standard "every dark UI needs these" surfaces. They are new public tokens, not just aliases.
 
@@ -382,6 +373,15 @@ Card hover styles must be overridden in 2a. Session cards are NOT clickable in t
 Defer to 2b: `Button`, `Input`, `Textarea` (Start Work form).
 Defer to slice 3: `Dialog`, `Toast` (kill confirm, decision feedback).
 
+### §10.5 — Chip colour storage
+
+Project chip colours were originally specified in §2 as typed constants in `lib/types/ui.ts` (`PROJECT_CHIP_COLORS`, keyed by a literal `ProjectShortCode` union). During slice 2a step 8.5 (chip preview gate), the AO/NB pair was found to read as visually similar. The deeper issue was structural rather than chromatic: hardcoding four chip colours in the type system treats project identity as a closed set, but Numbat is a dynamic multi-project orchestrator where the active project list changes over time. The fix promoted chip colours to project-row data (`chip_bg`, `chip_fg` columns on `projects`), removed the literal union from `lib/types/ui.ts`, and made the chip preview route read from the database via `listProjects()`. The AO/NB collision was then resolved as a data fix (a different hex for NB in `config/projects.json`) rather than a code fix. This is the V1 single-operator model — operator manages contrast manually. V2's admin UI for project ingestion will surface chip colour selection as a per-project setting.
+
+Implementation notes:
+- Schema: migration `0003` added `chip_bg` / `chip_fg` as `NOT NULL text` columns on `projects`.
+- Placeholder `#333333` / `#999999` used for non-canonical rows (test fixtures); migration `0004` deleted legacy `FX` rows that accumulated before test cleanup hooks were added.
+- Chip preview route at `app/dev/chip-preview` reads live from DB; `force-dynamic` to bypass RSC caching. Throwaway — delete once chip colours stabilise.
+
 ### §11 — Testing
 
 **One new test.** `lib/supabase/queries/sessions.test.ts`:
@@ -409,7 +409,7 @@ Uses `lib/supabase/test-fixtures.ts` from Slice 1 (`insertProjectFixture`, `inse
 | Filter bar (project + status) works via URL search params | `<ProjectFilter>`, `<StatusFilter>` writing `?project=`, `?status=`; `app/(sessions)/page.tsx` reading from `searchParams` |
 | Focus mode dims off-project sessions; doesn't hide them | `<SessionList>` applies `dimmed` to `<SessionCard>` based on `?focus=`; render uses `opacity-50` |
 | Status dots match the spec (mint pulses on running, amber awaiting, coral blocked, dim idle) | `<SessionCard>` reads `status`, applies `--status-*` CSS var; `running` adds `.status-dot--pulse` |
-| Project chip shows correct short_code with correct colour | `<ProjectChip>` reads `PROJECT_CHIP_COLORS[shortCode]` |
+| Project chip shows correct short_code with correct colour | `<ProjectChip>` reads `chip_bg` / `chip_fg` from its `Project` prop |
 | Mobile responsive: holds at 375px | Tailwind responsive classes; manually verified |
 | Realtime subscription on `sessions` updates the list | `<SessionList>` `useEffect` channel on `postgres_changes` for `table=sessions`, all events |
 | Cost badge shows today's spend, updates via realtime | `<CostBadge>` initial via `getTodayCostUsd()` from RSC; client subscribes to `llm_calls` INSERTs |
@@ -444,12 +444,12 @@ Bootstrap before data, scaffold before realtime:
 1. `package.json` edit, `next.config.mjs`, `tsconfig.json` tweak, `eslint.config.mjs`, `postcss.config.mjs`, `next-env.d.ts`. `pnpm install`.
 2. shadcn init + add `badge`, `select`, `card`.
 3. `app/globals.css` design tokens + Tailwind import + `@theme` block.
-4. `lib/types/ui.ts` chip color map.
+4. `lib/types/ui.ts` — `SessionFilters` type + `STATUS_TO_TOKEN` map. Chip colours land via `config/projects.json` + `pnpm db:seed` instead (see §10.5).
 5. `app/layout.tsx` + fonts + top bar with placeholder `<CostBadge initialUsd={0} />`.
 6. `app/page.tsx` redirect.
 7. `lib/supabase/queries/sessions.ts`.
 8. `lib/supabase/seed-mock-sessions.ts` + run `pnpm db:seed:sessions`.
-8.5. **Project chip preview gate.** Render the four chips (AO/WT/BB/NB) on the warm-dark base, side by side, with their short codes. Pause for user review of the chip colours before building `project-chip.tsx` or any session card. Adjustments go into `lib/types/ui.ts` at this step, not retroactively after cards are built.
+8.5. **Project chip preview gate.** Render the four chips (AO/WT/BB/NB) on the warm-dark base, side by side, with their short codes. Pause for user review of the chip colours before building `project-chip.tsx` or any session card. Adjustments go into `config/projects.json` + `pnpm db:seed` at this step (chip colours are per-project row data per §10.5), not retroactively after cards are built.
 9. `components/sessions/project-chip.tsx`, `session-card.tsx`.
 10. `components/sessions/project-filter.tsx`, `status-filter.tsx`, `focus-banner.tsx`.
 11. `components/sessions/session-list.tsx` (realtime owner). Cleanup: `useEffect` must return `() => sb.removeChannel(channel)` to prevent dev-server hot-reload channel leaks.
