@@ -12,6 +12,8 @@ export async function insertProjectFixture(
     name: string;
     short_code: string;
     repo_path: string;
+    chip_bg: string;
+    chip_fg: string;
   }> = {},
 ): Promise<string> {
   const suffix = Math.random().toString(36).slice(2, 8);
@@ -23,6 +25,10 @@ export async function insertProjectFixture(
       short_code: overrides.short_code ?? "FX",
       repo_path: overrides.repo_path ?? `/fixtures/${suffix}`,
       claude_md: null,
+      // Placeholder greys — these rows aren't part of the V1 project
+      // set; matches the migration 0003 fallback for non-canonical rows.
+      chip_bg: overrides.chip_bg ?? "#333333",
+      chip_fg: overrides.chip_fg ?? "#999999",
     })
     .select("id")
     .single();

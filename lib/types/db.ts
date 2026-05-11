@@ -62,6 +62,8 @@ export type Project = {
   short_code: string;
   repo_path: string;
   claude_md: string | null;
+  chip_bg: string;
+  chip_fg: string;
   created_at: string;
 };
 export type ProjectInsert = Omit<Project, "id" | "created_at"> & {

@@ -16,7 +16,6 @@ import "@/lib/env";
 import { sbAdmin } from "@/lib/supabase/server";
 import type { SessionInsert, SessionStatus } from "@/lib/types/db";
 import { SessionLastError, type SessionLastErrorT } from "@/lib/types/jsonb";
-import type { ProjectShortCode } from "@/lib/types/ui";
 
 const MARKER_PREFIX = "mock-";
 
@@ -56,7 +55,10 @@ const killedError: SessionLastErrorT = SessionLastError.parse({
 // runtime so the script doesn't bake project UUIDs.
 // ────────────────────────────────────────────────────────────────────
 type MockRow = {
-  short_code: ProjectShortCode;
+  // Plain string — the four-project literal union was retired in
+  // slice 2a.1. The runtime check below still enforces that the four
+  // canonical short_codes (AO/WT/BB/NB) exist in the DB before insert.
+  short_code: string;
   slice_name: string;
   task: string;
   status: SessionStatus;
