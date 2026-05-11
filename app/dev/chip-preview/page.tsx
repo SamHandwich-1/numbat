@@ -11,6 +11,11 @@
 // the only thing there) once chip colours are locked in.
 import { listProjects } from "@/lib/supabase/queries/sessions";
 
+// Bypass the RSC cache so edits to config/projects.json + a re-seed
+// show up on next reload without restarting dev. The route's purpose
+// is to reflect the live DB; static rendering defeats that.
+export const dynamic = "force-dynamic";
+
 function Chip({ code, bg, fg }: { code: string; bg: string; fg: string }) {
   return (
     <span
