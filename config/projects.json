@@ -4,27 +4,35 @@
     "name": "Alice OS",
     "short_code": "AO",
     "repo_path": "C:/Users/James/alice-os/",
-    "claude_md": null
+    "claude_md": null,
+    "chip_bg": "#3b4a4f",
+    "chip_fg": "#cfe6e8"
   },
   {
     "slug": "wedgetail",
     "name": "Wedgetail",
     "short_code": "WT",
     "repo_path": "C:/Users/James/wedgetail/",
-    "claude_md": null
+    "claude_md": null,
+    "chip_bg": "#4a3a2c",
+    "chip_fg": "#e6d3b8"
   },
   {
     "slug": "bowerbird",
     "name": "Bowerbird",
     "short_code": "BB",
     "repo_path": "C:/Users/James/bowerbird/",
-    "claude_md": null
+    "claude_md": null,
+    "chip_bg": "#3d3a4a",
+    "chip_fg": "#cdc6e0"
   },
   {
     "slug": "numbat",
     "name": "Numbat",
     "short_code": "NB",
     "repo_path": "C:/Users/James/numbat/",
-    "claude_md": null
+    "claude_md": null,
+    "chip_bg": "#2c3e3a",
+    "chip_fg": "#bcd0c7"
   }
 ]
