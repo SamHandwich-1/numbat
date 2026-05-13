@@ -1,0 +1,69 @@
+// Sessions surface RSC. Reads filter params from the URL, fans out the
+// two server queries it consumes in parallel, and composes the filter
+// bar, focus banner, and the realtime SessionList. Client components
+// handle all interaction; this file does no `"use client"` work.
+
+import { listProjects, listSessions } from "@/lib/supabase/queries/sessions";
+import type { SessionFilters } from "@/lib/types/ui";
+import type { SessionStatus } from "@/lib/types/db";
+import { FocusBanner } from "@/components/sessions/focus-banner";
+import { ProjectFilter } from "@/components/sessions/project-filter";
+import { SessionList } from "@/components/sessions/session-list";
+import { StatusFilter } from "@/components/sessions/status-filter";
+
+const KNOWN_STATUSES: ReadonlySet<SessionStatus> = new Set([
+  "idle",
+  "planning",
+  "running",
+  "awaiting_review",
+  "blocked",
+  "done",
+  "killed",
+]);
+
+function isSessionStatus(s: string): s is SessionStatus {
+  return KNOWN_STATUSES.has(s as SessionStatus);
+}
+
+export default async function SessionsPage({
+  searchParams,
+}: {
+  // Next 15: searchParams is a Promise.
+  searchParams: Promise<{
+    project?: string;
+    status?: string;
+    focus?: string;
+  }>;
+}) {
+  // Awaiting searchParams forces dynamic rendering, which lets
+  // client-component useSearchParams() work without a Suspense boundary.
+  const sp = await searchParams;
+
+  // Reject unknown status values rather than passing them to the DB —
+  // an unknown value would return zero rows silently. Project codes
+  // pass through unchecked because the project set is dynamic data.
+  const filters: SessionFilters = {};
+  if (sp.project) filters.projectShortCode = sp.project;
+  if (sp.status && isSessionStatus(sp.status)) filters.status = sp.status;
+
+  // Fan out the two queries the page actually consumes. listSessions
+  // returns an embedded project subset; listProjects returns the
+  // canonical full list (used by the filter dropdown, the focus banner,
+  // and SessionList for project lookup on realtime-arrived sessions).
+  // The cost number is fetched in app/layout.tsx — the layout owns it.
+  const [{ sessions }, projects] = await Promise.all([
+    listSessions(filters),
+    listProjects(),
+  ]);
+
+  return (
+    <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
+      <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+        <ProjectFilter projects={projects} />
+        <StatusFilter />
+      </div>
+      <FocusBanner projects={projects} />
+      <SessionList initialSessions={sessions} projects={projects} />
+    </main>
+  );
+}

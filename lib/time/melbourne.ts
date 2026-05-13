@@ -69,3 +69,18 @@ export function melbourneTodayStartUtcIso(): string {
   }
   return new Date(utcMs).toISOString();
 }
+
+/**
+ * True if the given UTC ISO timestamp falls on or after today's local
+ * midnight in Melbourne. Used by the cost badge's realtime handler to
+ * filter INSERTs to today's rows.
+ *
+ * Re-evaluates the boundary on every call rather than caching it, so
+ * the cost badge naturally drops yesterday's tail events once Melbourne
+ * ticks past midnight without needing to re-subscribe.
+ */
+export function isMelbourneToday(iso: string): boolean {
+  return (
+    new Date(iso).getTime() >= new Date(melbourneTodayStartUtcIso()).getTime()
+  );
+}

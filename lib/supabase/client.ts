@@ -1,3 +1,8 @@
+// Browser-safe anon-key client. USE ONLY for realtime subscriptions
+// (session-list.tsx, cost-badge.tsx) — narrow carve-out from CLAUDE.md's
+// "DB access: only from server" rule. New queries: lib/supabase/queries/
+// via sbAdmin, passed as props. Never inline from(...) here.
+
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/db";
 

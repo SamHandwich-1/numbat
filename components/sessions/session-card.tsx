@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { STATUS_TO_TOKEN } from "@/lib/types/ui";
 import type { Project, Session } from "@/lib/types/db";
 import { Card } from "@/components/ui/card";
-import { ProjectChip } from "@/components/sessions/project-chip";
+import { FocusChipButton } from "@/components/sessions/focus-chip-button";
 
 // Bucketed relative timestamp. Four buckets don't justify pulling
 // Intl.RelativeTimeFormat; pure function takes `now` so a future test
@@ -51,7 +51,7 @@ export function SessionCard({
       aria-disabled={dimmed || undefined}
     >
       <div className="flex items-center gap-2">
-        <ProjectChip project={project} />
+        <FocusChipButton project={project} />
         {glyph ? (
           <span
             className="text-xs leading-none"
