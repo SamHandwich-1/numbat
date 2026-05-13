@@ -37,7 +37,21 @@ export const SpecOpenQuestions = z.array(
   }),
 );
 
-// decisions.payload — discriminated union by decision type
+// decisions.payload — discriminated union by decision type.
+//
+// Most variants record human-operator actions (approve, kill,
+// redirect, ship, etc.). `start_work` is the exception: it records
+// the rules-based router's classification when the operator submits
+// a brief via the Start Work surface. NOT a human approval — use
+// `approve` for those — but the audit trail of the system routing
+// on the operator's behalf, and the discriminator V2's LLM router
+// will train against.
+//
+// SYNC: `start_work.matched_rule` enum mirrors `RouterMatchedRule`
+// in `lib/orchestration/router.ts`. Update both sides together —
+// add a rule there, add the literal here. No codebase pattern yet
+// for auto-deriving zod enums from TS unions; this comment is the
+// V1 guarantee.
 export const DecisionPayload = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approve"), note: z.string().optional() }),
   z.object({ type: z.literal("redirect"), reply_text: z.string() }),
@@ -50,6 +64,20 @@ export const DecisionPayload = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("ship"), spec_id: z.string() }),
   z.object({ type: z.literal("edit_spec"), spec_id: z.string(), diff: z.string() }),
+  z.object({
+    type: z.literal("start_work"),
+    routed_to: z.enum(["direct", "bilby"]),
+    matched_rule: z.enum([
+      "length_under_200",
+      "keyword_fix",
+      "keyword_typo",
+      "keyword_copy",
+      "keyword_style",
+      "question_mark",
+      "default_bilby",
+    ]),
+    reason: z.string(),
+  }),
 ]);
 
 // llm_calls.error — populated when a call failed

@@ -47,7 +47,8 @@ export type DecisionType =
   | "accept_critique"
   | "reject_critique"
   | "ship"
-  | "edit_spec";
+  | "edit_spec"
+  | "start_work";
 
 export type LlmProvider = "anthropic" | "xai" | "agent_sdk";
 
