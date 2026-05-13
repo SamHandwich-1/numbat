@@ -23,7 +23,10 @@ export type RouterMatchedRule =
   | "keyword_copy"
   | "keyword_style"
   | "question_mark"
-  | "default_bilby";
+  | "default_bilby"
+  | "manual"; // Reserved for callers that synthesize a decision
+  // without router involvement (e.g., /api/sessions manual creates).
+  // The route() function itself never returns this value.
 
 export type RouterDecision = {
   pipeline: RouterPipeline;

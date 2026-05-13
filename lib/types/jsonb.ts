@@ -75,6 +75,7 @@ export const DecisionPayload = z.discriminatedUnion("type", [
       "keyword_style",
       "question_mark",
       "default_bilby",
+      "manual",
     ]),
     reason: z.string(),
   }),
