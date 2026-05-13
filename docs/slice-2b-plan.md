@@ -226,7 +226,7 @@ Flow:
 
 **`POST /api/sessions`**
 
-Lower-level Direct-create endpoint. Body: `{ projectId, brief, sliceName? }`. Calls `createSession` with a synthetic decision payload (`{ matched_rule: "manual", reason: "Created via /api/sessions, no router involvement" }`). Returns `{ id }`. Same error-passthrough pattern in the catch block.
+Lower-level Direct-create endpoint. Body: `{ projectId, brief }`. (sliceName override was speculatively reserved in an earlier draft but dropped — parsed-but-unused is a silent-override risk. Re-add when slice 3+ has a real consumer.) Calls `createSession` with a synthetic decision payload (`{ matched_rule: "manual", reason: "Created via /api/sessions, no router involvement" }`). Returns `{ id }`. Same error-passthrough pattern in the catch block.
 
 Used by /api/start-work's Direct branch (delegates) and reserved for slice 3+ flows ("retry session", future programmatic creates). Keeping it as a discrete primitive lets slice 3 build retry without re-routing through the router.
 
