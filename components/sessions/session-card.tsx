@@ -7,20 +7,7 @@ import { STATUS_TO_TOKEN } from "@/lib/types/ui";
 import type { Project, Session } from "@/lib/types/db";
 import { Card } from "@/components/ui/card";
 import { FocusChipButton } from "@/components/sessions/focus-chip-button";
-
-// Bucketed relative timestamp. Four buckets don't justify pulling
-// Intl.RelativeTimeFormat; pure function takes `now` so a future test
-// can pin the clock without mocking globals.
-function relativeTime(iso: string, now: number = Date.now()): string {
-  const diffSec = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} min ago`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr} hr ago`;
-  const diffDay = Math.round(diffHr / 24);
-  return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
-}
+import { RelativeTime } from "@/components/sessions/relative-time";
 
 export function SessionCard({
   session,
@@ -71,7 +58,7 @@ export function SessionCard({
           />
         )}
         <span className="ml-auto font-mono text-xs text-muted-foreground">
-          {statusLabel} · {relativeTime(session.updated_at)}
+          {statusLabel} · <RelativeTime iso={session.updated_at} />
         </span>
       </div>
 
