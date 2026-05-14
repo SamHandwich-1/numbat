@@ -14,6 +14,9 @@ node_modules/
 dist/
 out/
 
+# Dev-time logs (verification gate redirects pnpm dev > dev.log)
+dev.log
+
 # TypeScript incremental build cache
 *.tsbuildinfo
 
