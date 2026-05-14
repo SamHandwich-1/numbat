@@ -1,7 +1,8 @@
 // Sessions surface RSC. Reads filter params from the URL, fans out the
-// two server queries it consumes in parallel, and composes the filter
-// bar, focus banner, and the realtime SessionList. Client components
-// handle all interaction; this file does no `"use client"` work.
+// two server queries it consumes in parallel, and composes the Start
+// Work input, the filter bar, the focus banner, and the realtime
+// SessionList. Client components handle all interaction; this file
+// does no `"use client"` work.
 
 import { listProjects, listSessions } from "@/lib/supabase/queries/sessions";
 import type { SessionFilters } from "@/lib/types/ui";
@@ -9,6 +10,7 @@ import type { SessionStatus } from "@/lib/types/db";
 import { FocusBanner } from "@/components/sessions/focus-banner";
 import { ProjectFilter } from "@/components/sessions/project-filter";
 import { SessionList } from "@/components/sessions/session-list";
+import { StartWorkInput } from "@/components/sessions/start-work-input";
 import { StatusFilter } from "@/components/sessions/status-filter";
 
 const KNOWN_STATUSES: ReadonlySet<SessionStatus> = new Set([
@@ -58,6 +60,11 @@ export default async function SessionsPage({
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
+      {/* Start Work input — top chrome, visually divided from the list
+          below by border-b + pb-4 per plan §2. */}
+      <div className="border-b border-border pb-4">
+        <StartWorkInput projects={projects} />
+      </div>
       <div className="flex flex-wrap gap-2 sm:flex-nowrap">
         <ProjectFilter projects={projects} />
         <StatusFilter />
