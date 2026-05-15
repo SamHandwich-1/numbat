@@ -1,6 +1,17 @@
 // Session card — list-row rendering of a single Session row plus its
-// joined Project. Server-renderable, presentational, non-interactive in
-// slice 2a. Single-session route lands in slice 3.
+// joined Project. Server-renderable. Slice 3 adds a Link wrap around
+// the textual content (slice_name + task) so cards navigate to the
+// detail page; the FocusChipButton stays a sibling so its click
+// doesn't also navigate (nested interactive elements would be
+// invalid HTML and a click hazard).
+//
+// prefetch={false} on the Link: with prefetch on, hovering each card
+// would execute the detail-page RSC (getSession + ContextLoader +
+// skills query) for every visible card. That's needless DB load —
+// the operator only opens a small handful of sessions per session.
+
+import type { Route } from "next";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { STATUS_TO_TOKEN } from "@/lib/types/ui";
@@ -62,9 +73,14 @@ export function SessionCard({
         </span>
       </div>
 
-      <p className="font-mono text-xs text-muted-foreground">{session.slice_name}</p>
-
-      <p>{session.task}</p>
+      <Link
+        href={`/sessions/${session.id}` as Route}
+        prefetch={false}
+        className="flex flex-col gap-1 rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <p className="font-mono text-xs text-muted-foreground">{session.slice_name}</p>
+        <p>{session.task}</p>
+      </Link>
 
       {session.status === "blocked" && session.last_error && (
         <p className="truncate text-muted-foreground">

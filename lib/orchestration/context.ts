@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/types/db";
+import { listSkillsForProject } from "@/lib/supabase/queries/skills";
+import type { Database, Skill } from "@/lib/types/db";
 
 // ───────────────────────────────────────────────────────────────────────
 // Scopes
@@ -10,11 +11,17 @@ export type ContextScope = "project" | "session" | "plan";
 // V1 stub shapes. Slice 5 / 6 fills these in with real CLAUDE.md / specs /
 // decisions / brief / dialectic state. The fields are typed but empty so
 // callers can already write code against the shape.
+//
+// `skills` is widened from `readonly never[]` to `readonly Skill[]` in
+// Slice 3 — the session scope now actually fetches the project's skills
+// for the Reply composer's quick-move chips. The project scope still
+// returns `[]` until later slices fill it in; the type is consistent
+// across scopes so callers don't have to special-case.
 export type ProjectContext = {
   projectId: string;
   claudeMd: string | null;
   specs: readonly never[];
-  skills: readonly never[];
+  skills: readonly Skill[];
   recentDecisions: readonly never[];
 };
 
@@ -86,7 +93,11 @@ export class ContextLoader {
         throw new Error("ContextLoader.buildFor('session') requires sessionId");
       }
       await this.assertSessionInProject(projectId, secondaryId);
-      return this.emptySession(projectId, secondaryId);
+      // Skills load runs AFTER the project assertion. The assertion is
+      // the project-scoping gate; if it throws, the skills query never
+      // runs. Implicit invariant — do not reorder.
+      const skills = await listSkillsForProject(this.db, projectId);
+      return this.sessionContext(projectId, secondaryId, skills);
     }
     if (scope === "plan") {
       if (!secondaryId) {
@@ -152,7 +163,8 @@ export class ContextLoader {
     }
   }
 
-  // V1 stubs. Slice 5 wires real loaders.
+  // V1 stubs. Slice 5 wires the rest of the loaders (claudeMd, specs,
+  // recentDecisions). Slice 3 populates `skills` for the session scope.
   private emptyProject(projectId: string): ProjectContext {
     return {
       projectId,
@@ -162,9 +174,14 @@ export class ContextLoader {
       recentDecisions: [],
     };
   }
-  private emptySession(projectId: string, sessionId: string): SessionContext {
+  private sessionContext(
+    projectId: string,
+    sessionId: string,
+    skills: readonly Skill[],
+  ): SessionContext {
     return {
       ...this.emptyProject(projectId),
+      skills,
       sessionId,
       spec: null,
       priorDebrief: null,

@@ -1,10 +1,14 @@
 import { z } from "zod";
 
 // sessions.last_error
+// `operator` source covers manual termination via the Slice 3 Kill action —
+// not an error from the agent/worker/db/validator, but an authored
+// termination reason. Additive enum extension; existing call sites are
+// unaffected.
 export const SessionLastError = z.object({
   message: z.string(),
   stack: z.string().optional(),
-  source: z.enum(["agent_sdk", "worker", "supabase", "validation"]),
+  source: z.enum(["agent_sdk", "worker", "supabase", "validation", "operator"]),
   occurred_at: z.string().datetime(),
 });
 
@@ -101,6 +105,24 @@ export const PlanStageContent = z.discriminatedUnion("action", [
   z.object({ action: z.literal("debrief"), markdown: z.string() }),
 ]);
 
+// Debrief content — the four-section + optional new-concept structure
+// produced by the Opus debrief stage. Not yet persisted in V1 (Slice 5
+// decides on the persistence column); for Slice 3 this schema validates
+// the mock fixture at module load. Reuse this schema when persistence
+// lands.
+export const DebriefNewConcept = z.object({
+  title: z.string().min(1),
+  body: z.string().min(1),
+});
+
+export const DebriefContent = z.object({
+  what_we_did: z.string().min(1),
+  where_this_fits: z.string().min(1),
+  why_it_matters: z.string().min(1),
+  what_went_wrong_or_next: z.string().min(1),
+  new_concept: DebriefNewConcept.optional(),
+});
+
 export type SessionLastErrorT = z.infer<typeof SessionLastError>;
 export type SpecFilesAffectedT = z.infer<typeof SpecFilesAffected>;
 export type SpecAcceptanceCriteriaT = z.infer<typeof SpecAcceptanceCriteria>;
@@ -108,3 +130,5 @@ export type SpecOpenQuestionsT = z.infer<typeof SpecOpenQuestions>;
 export type DecisionPayloadT = z.infer<typeof DecisionPayload>;
 export type LlmCallErrorT = z.infer<typeof LlmCallError>;
 export type PlanStageContentT = z.infer<typeof PlanStageContent>;
+export type DebriefContentT = z.infer<typeof DebriefContent>;
+export type DebriefNewConceptT = z.infer<typeof DebriefNewConcept>;

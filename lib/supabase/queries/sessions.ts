@@ -57,6 +57,24 @@ export async function listSessions(
 }
 
 /**
+ * Single session row by id. Returns null when the row does not exist
+ * (the caller can map to notFound() in an RSC). Throws on any other
+ * Supabase error — same pattern as listSessions.
+ *
+ * Uses maybeSingle() rather than single(): a missing row is an
+ * expected outcome (operator pastes a stale URL), not a query error.
+ */
+export async function getSession(id: string): Promise<Session | null> {
+  const { data, error } = await sbAdmin
+    .from("sessions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getSession: ${error.message}`);
+  return data ?? null;
+}
+
+/**
  * All projects, sorted by name. Used by ProjectFilter (step 10) to
  * render the dropdown options.
  */
