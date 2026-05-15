@@ -4,7 +4,7 @@ Calibration data for V2's LLM-based router.
 
 ## Purpose
 
-Numbat's planning dialectic (Bilby) is a four-stage flow: Opus draft → Grok critique → Opus considered → Grok validate. The bootstrap dialectic (`docs/numbat-bootstrap-dialectic.md`) is the canonical worked example, preserved as the seed entry of the decisions log.
+Numbat's planning dialectic (Bilby) is a four-stage flow: Opus draft → Grok critique → Opus considered → Grok validate. The bootstrap dialectic (`docs/decisions/0001-bootstrap-dialectic.md`) is the canonical worked example, preserved as the seed entry of the decisions log.
 
 This folder is for everything **else** — partial dialectic runs that aren't a full Bilby. Single-stage Grok critiques on a slice plan, ad-hoc Opus pre-mortems on a prompt draft, two-stage critiques on a code-review patch. Anything where a non-Bilby LLM critique is run on a Numbat artifact and the signal-to-noise is worth measuring.
 

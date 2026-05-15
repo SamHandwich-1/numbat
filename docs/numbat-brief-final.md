@@ -1,7 +1,7 @@
 # Numbat — Claude Code Brief
 
 > **Status:** Slices 0 and 1 closed. Slice 0 SDK spike memo at `docs/sdk-spike.md`; Slice 1 schema + data layer plan at `docs/slice-1-plan.md`. Slice 2 planning is the next session.
-> **Dialectic trail:** `/docs/numbat-bootstrap-dialectic.md`.
+> **Dialectic trail:** `/docs/decisions/0001-bootstrap-dialectic.md`.
 > **Last revised:** 9 May 2026.
 
 ---
@@ -332,7 +332,8 @@ numbat/
 │   ├── session-runner.ts         # spawned per session
 │   └── export-decisions.ts       # CLI: pnpm export:decisions
 ├── docs/
-│   └── numbat-bootstrap-dialectic.md
+│   └── decisions/
+│       └── 0001-bootstrap-dialectic.md
 ├── public/
 ├── supabase/                     # Supabase CLI convention (project-local)
 │   ├── config.toml               # `supabase init` output
@@ -602,4 +603,4 @@ Most prior open questions resolved by the dialectic. Remaining:
 2. **Run Slice 0 spike.** Half-day timebox. Output the memo to `docs/sdk-spike.md`.
 3. **Update this brief** if the spike reveals surprises. Otherwise, proceed to Slice 1.
 4. **Build slices in order.** Each slice's acceptance criteria are the contract. Treat any new question as an Open Question for the spec rather than guessing.
-5. **Preserve the dialectic record.** `/docs/numbat-bootstrap-dialectic.md` is the first entry in the decisions log. Future plans should follow the same four-stage pattern with the same artifact preservation — Numbat being built using Numbat's intended workflow.
+5. **Preserve the decisions record.** The decisions log lives at `docs/decisions/`, one file per entry, named `NNNN-slug.md`. `docs/decisions/0001-bootstrap-dialectic.md` is entry 1. An entry is either a Bilby dialectic (four labelled stages + Final Verdict, per the bootstrap example) or a single-decision record (a meaningful architectural or scope call, its reasoning, and outcome). This is distinct from `docs/dialectic/`, which holds the individual stage files of a single Bilby run, and from the DB `decisions` table that `pnpm export:decisions` reads. Numbat is built using Numbat's intended workflow — the log is the seed of every future calibration.

@@ -28,7 +28,7 @@ Two things from the spike memo are now load-bearing in this slice:
 - Hand-written TypeScript types for every table (`lib/types/db.ts`).
 - Zod schemas for every `jsonb` column, with explicit field shapes — no `z.unknown()`.
 - `ContextLoader` skeleton in `lib/orchestration/context.ts`: class shape, project_id enforcement, cross-project read throw, typed stubs for `buildFor(projectId, scope)`.
-- `config/projects.json` with four seed projects (DS, MH, AL, NB).
+- `config/projects.json` with four seed projects (AO, WT, BB, NB).
 - `lib/supabase/seed.ts` — reads `config/projects.json` and inserts via service-role client.
 - Vitest set up (brief §12 commits to vitest for unit tests).
 - Three tests, all colocated next to source:
@@ -161,13 +161,13 @@ Slice 1 test only asserts the throw. Stub bodies (`emptyShapeFor`) return a type
 
 ```json
 [
-  { "slug": "departed-spirits", "name": "Departed Spirits", "short_code": "DS",
-    "repo_path": "/path/to/departed-spirits/" },
-  { "slug": "mens-health",      "name": "Men's Health",     "short_code": "MH",
-    "repo_path": "/path/to/mens-health/" },
-  { "slug": "aluna",            "name": "Aluna",            "short_code": "AL",
-    "repo_path": "/path/to/aluna/" },
-  { "slug": "numbat",           "name": "Numbat",           "short_code": "NB",
+  { "slug": "alice-os",  "name": "Alice OS",  "short_code": "AO",
+    "repo_path": "/path/to/alice-os/" },
+  { "slug": "wedgetail", "name": "Wedgetail", "short_code": "WT",
+    "repo_path": "/path/to/wedgetail/" },
+  { "slug": "bowerbird", "name": "Bowerbird", "short_code": "BB",
+    "repo_path": "/path/to/bowerbird/" },
+  { "slug": "numbat",    "name": "Numbat",    "short_code": "NB",
     "repo_path": "<absolute path to this repo>" }
 ]
 ```
@@ -304,7 +304,7 @@ supabase.com and provides three env vars:
 
 **Why a new project rather than reusing an existing one:** Numbat's data
 model (sessions, plans, decisions, llm_calls) doesn't overlap with any
-sibling codebase (Departed Spirits, Men's Health, Aluna, wedgetail), so
+sibling codebase (Alice OS, Wedgetail, Bowerbird), so
 sharing buys nothing and creates shared migration risk. Free tier is
 sufficient.
 
@@ -342,7 +342,7 @@ End-to-end, after implementation:
    Supabase instance. Re-running is a no-op (or produces a clean error
    about the migration already being applied — Supabase CLI handles this).
 4. `pnpm db:seed` upserts four rows in `projects` with short_codes
-   `DS`, `MH`, `AL`, `NB`.
+   `AO`, `WT`, `BB`, `NB`.
 5. `pnpm test` runs the three vitest files:
    - **context.test.ts** — `ContextLoader.buildFor(A, 'session', sessionInB)` throws `ContextLoaderCrossProjectError` containing both project ids.
    - **llm-calls.test.ts** — fan-out round-trip: insert two rows from a single mock `modelUsage`, query, sum `cost_usd`, assert it equals the synthetic `total_cost_usd` to within `1e-6`.

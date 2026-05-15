@@ -1,7 +1,7 @@
 # Numbat — Repo Context
 
 > Read by the Claude Agent SDK on every session via `settingSources: ['project']`.
-> Companion docs: `docs/numbat-brief-final.md` (the full brief), `docs/numbat-bootstrap-dialectic.md` (decision history).
+> Companion docs: `docs/numbat-brief-final.md` (the full brief), `docs/decisions/` (decision log; entry `0001-bootstrap-dialectic.md` is the seed).
 
 ## What this is
 
