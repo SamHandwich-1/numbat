@@ -5,10 +5,22 @@ import { z } from "zod";
 // not an error from the agent/worker/db/validator, but an authored
 // termination reason. Additive enum extension; existing call sites are
 // unaffected.
+// `watchdog` (Slice 4) covers reapStaleKillingSessions timing out a
+// session stuck in `killing` — the worker may have died for any reason,
+// or the realtime kill event may never have arrived; calling it a
+// `worker` error misrepresents what actually happened. Same additive
+// pattern.
 export const SessionLastError = z.object({
   message: z.string(),
   stack: z.string().optional(),
-  source: z.enum(["agent_sdk", "worker", "supabase", "validation", "operator"]),
+  source: z.enum([
+    "agent_sdk",
+    "worker",
+    "supabase",
+    "validation",
+    "operator",
+    "watchdog",
+  ]),
   occurred_at: z.string().datetime(),
 });
 
@@ -123,6 +135,29 @@ export const DebriefContent = z.object({
   new_concept: DebriefNewConcept.optional(),
 });
 
+// sessions.diff — parsed git-diff output from the worker's post-session
+// captureDiff() call (lib/feathertail/diff.ts). Shape matches Slice 3's
+// MockedDiff so the page consumer (DiffPreview) doesn't need to change.
+// Same validation pattern as DebriefContent: parsed at insert (worker)
+// and at read (page) so drift surfaces as a Zod parse error rather
+// than a silent UI bug.
+export const WorktreeDiffFile = z.object({
+  path: z.string(),
+  status: z.enum(["added", "modified", "deleted"]),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  patch: z.string().nullable(),
+});
+
+export const WorktreeDiff = z.object({
+  files: z.array(WorktreeDiffFile),
+  totals: z.object({
+    files_changed: z.number().int().nonnegative(),
+    additions: z.number().int().nonnegative(),
+    deletions: z.number().int().nonnegative(),
+  }),
+});
+
 export type SessionLastErrorT = z.infer<typeof SessionLastError>;
 export type SpecFilesAffectedT = z.infer<typeof SpecFilesAffected>;
 export type SpecAcceptanceCriteriaT = z.infer<typeof SpecAcceptanceCriteria>;
@@ -132,3 +167,5 @@ export type LlmCallErrorT = z.infer<typeof LlmCallError>;
 export type PlanStageContentT = z.infer<typeof PlanStageContent>;
 export type DebriefContentT = z.infer<typeof DebriefContent>;
 export type DebriefNewConceptT = z.infer<typeof DebriefNewConcept>;
+export type WorktreeDiffT = z.infer<typeof WorktreeDiff>;
+export type WorktreeDiffFileT = z.infer<typeof WorktreeDiffFile>;

@@ -6,6 +6,7 @@ import type {
   SpecAcceptanceCriteriaT,
   SpecFilesAffectedT,
   SpecOpenQuestionsT,
+  WorktreeDiffT,
 } from "@/lib/types/jsonb";
 
 // ───────────────────────────────────────────────────────────────────────
@@ -19,7 +20,8 @@ export type SessionStatus =
   | "awaiting_review"
   | "blocked"
   | "done"
-  | "killed";
+  | "killed"
+  | "killing"; // Slice 4: transient state between operator kill and worker SDK teardown
 
 export type PlanStatus =
   | "drafting"
@@ -84,18 +86,23 @@ export type Session = {
   spec_id: string | null;
   agent_session_id: string | null;
   last_error: SessionLastErrorT | null;
+  // Slice 4: parsed git-diff output written by the worker on transition
+  // to awaiting_review. null until then. Shape validated against the
+  // WorktreeDiff Zod schema in lib/types/jsonb.ts.
+  diff: WorktreeDiffT | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
 };
 export type SessionInsert = Omit<
   Session,
-  "id" | "created_at" | "updated_at" | "completed_at"
+  "id" | "created_at" | "updated_at" | "completed_at" | "diff"
 > & {
   id?: string;
   created_at?: string;
   updated_at?: string;
   completed_at?: string | null;
+  diff?: WorktreeDiffT | null;
 };
 
 export type Plan = {

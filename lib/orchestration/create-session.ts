@@ -26,20 +26,45 @@ export type CreateSessionInput = {
   decision: RouterDecision;
 };
 
+/**
+ * Build a slice_name from an operator brief.
+ *
+ * Shape: `slugify(brief.slice(0, 60)) + '-' + randomSuffix(6)`.
+ *
+ * CONTRACT: slice 4 consumes slice_name as a worktree directory
+ * segment (`~/numbat-worktrees/<project-slug>/<slice-name>/`). Any
+ * future format change requires a data migration — existing
+ * worktrees would be orphaned by a rename. Treat slice_name as a
+ * stable identifier, not a display string.
+ *
+ * Reserved-prefix guard (Slice 4 §0b): the seed-mock-sessions script
+ * wipes any row whose slice_name matches `mock-%` or `fixture-%`. A
+ * brief beginning with "Mock the…" or "Fixture this…" slugifies to
+ * `mock-the-…` / `fixture-this-…` and would collide. Prepend `r-`
+ * (for "real") to defang both prefixes mechanically. The random
+ * suffix still guarantees uniqueness.
+ *
+ * Exported for unit testing. createSession is the only production
+ * caller.
+ */
+export function buildSliceName(
+  brief: string,
+  suffix: string = randomSuffix(6),
+): string {
+  const rawSlug = slugify(brief.slice(0, 60));
+  const safeSlug =
+    rawSlug.startsWith("mock-") || rawSlug.startsWith("fixture-")
+      ? `r-${rawSlug}`
+      : rawSlug;
+  return `${safeSlug}-${suffix}`;
+}
+
 export async function createSession({
   projectId,
   brief,
   decision,
 }: CreateSessionInput): Promise<{ id: string }> {
-  // slice_name = slugify(brief.slice(0, 60)) + '-' + 6-char random suffix
-  // Example: "fix typo in footer" → "fix-typo-in-footer-a3f9k2"
-  //
-  // CONTRACT: slice 4 will consume slice_name as a worktree directory
-  // segment (`~/numbat-worktrees/<project-slug>/<slice-name>/`). Any
-  // future format change requires a data migration — existing
-  // worktrees would be orphaned by a rename. Treat slice_name as a
-  // stable identifier, not a display string.
-  const slice_name = `${slugify(brief.slice(0, 60))}-${randomSuffix(6)}`;
+  const slice_name = buildSliceName(brief);
 
   const { data: session, error: sessionError } = await sbAdmin
     .from("sessions")

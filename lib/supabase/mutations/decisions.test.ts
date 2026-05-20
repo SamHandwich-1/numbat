@@ -140,7 +140,7 @@ describe.skipIf(!haveCreds)("recordDecision state-machine (live DB)", () => {
     expect(Number.isNaN(Date.parse(lastError.occurred_at))).toBe(false);
   });
 
-  test("recordDecision throws against a session not in awaiting_review", async () => {
+  test("recordDecision throws against a session not in awaiting_review (approve guard)", async () => {
     const { sbAdmin } = await import("@/lib/supabase/server");
     const { recordDecision } = await import(
       "@/lib/supabase/mutations/decisions"
@@ -163,5 +163,216 @@ describe.skipIf(!haveCreds)("recordDecision state-machine (live DB)", () => {
         payload: { type: "approve" },
       }),
     ).rejects.toThrow(/awaiting_review/);
+  });
+
+  // ───────────────────────────────────────────────────────────────────
+  // Slice 4 two-phase kill cases (plan §8d). Kill is now valid from
+  // idle/running/awaiting_review/blocked with different outcomes:
+  //   idle | running             → status='killing'  (transient)
+  //   awaiting_review | blocked  → status='killed'   (direct)
+  //   killing | done | killed    → throw
+  // ───────────────────────────────────────────────────────────────────
+
+  test("kill on idle → status='killing' (transient, live-worker path)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "idle",
+    });
+
+    await recordDecision(sbAdmin, {
+      sessionId: session_id,
+      type: "kill",
+      payload: { type: "kill", reason: "idle session, never started" },
+    });
+
+    const { data: row } = await sbAdmin
+      .from("sessions")
+      .select("status, completed_at, last_error")
+      .eq("id", session_id)
+      .single();
+    expect(row?.status).toBe("killing");
+    expect(row?.completed_at).toBeNull(); // worker writes completed_at on transitionToKilled
+    expect((row?.last_error as { source: string }).source).toBe("operator");
+  });
+
+  test("kill on running → status='killing' (transient, live-worker path)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "running",
+    });
+
+    await recordDecision(sbAdmin, {
+      sessionId: session_id,
+      type: "kill",
+      payload: { type: "kill", reason: "scope drift" },
+    });
+
+    const { data: row } = await sbAdmin
+      .from("sessions")
+      .select("status, completed_at")
+      .eq("id", session_id)
+      .single();
+    expect(row?.status).toBe("killing");
+    expect(row?.completed_at).toBeNull();
+  });
+
+  test("kill on awaiting_review → status='killed' DIRECT (no live worker)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "awaiting_review",
+    });
+
+    await recordDecision(sbAdmin, {
+      sessionId: session_id,
+      type: "kill",
+      payload: { type: "kill", reason: "reviewed and rejected" },
+    });
+
+    const { data: row } = await sbAdmin
+      .from("sessions")
+      .select("status, completed_at, last_error")
+      .eq("id", session_id)
+      .single();
+    expect(row?.status).toBe("killed");
+    expect(row?.completed_at).not.toBeNull(); // direct terminal write
+    expect((row?.last_error as { message: string }).message).toBe(
+      "reviewed and rejected",
+    );
+  });
+
+  test("kill on blocked → status='killed' DIRECT (no live worker)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "blocked",
+    });
+
+    await recordDecision(sbAdmin, {
+      sessionId: session_id,
+      type: "kill",
+      payload: { type: "kill", reason: "clean up the blocked row" },
+    });
+
+    const { data: row } = await sbAdmin
+      .from("sessions")
+      .select("status, completed_at")
+      .eq("id", session_id)
+      .single();
+    expect(row?.status).toBe("killed");
+    expect(row?.completed_at).not.toBeNull();
+  });
+
+  test("kill on killing → throws (kill already in flight)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "killing",
+    });
+
+    await expect(
+      recordDecision(sbAdmin, {
+        sessionId: session_id,
+        type: "kill",
+        payload: { type: "kill", reason: "double-kill" },
+      }),
+    ).rejects.toThrow(/kill not valid/);
+  });
+
+  test("kill on done → throws (terminal)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "done",
+    });
+
+    await expect(
+      recordDecision(sbAdmin, {
+        sessionId: session_id,
+        type: "kill",
+        payload: { type: "kill", reason: "x" },
+      }),
+    ).rejects.toThrow(/kill not valid/);
+  });
+
+  test("kill on killed → throws (terminal)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "killed",
+    });
+
+    await expect(
+      recordDecision(sbAdmin, {
+        sessionId: session_id,
+        type: "kill",
+        payload: { type: "kill", reason: "x" },
+      }),
+    ).rejects.toThrow(/kill not valid/);
   });
 });

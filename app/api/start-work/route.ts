@@ -20,6 +20,7 @@ import { env } from "@/lib/env";
 import { createPlan } from "@/lib/orchestration/create-plan";
 import { createSession } from "@/lib/orchestration/create-session";
 import { route } from "@/lib/orchestration/router";
+import { spawnSessionWorker } from "@/lib/orchestration/spawn-session-worker";
 import { sbAdmin } from "@/lib/supabase/server";
 
 const StartWorkRequest = z.object({
@@ -80,6 +81,11 @@ export async function POST(req: Request) {
   try {
     if (decision.pipeline === "direct") {
       const { id } = await createSession({ projectId, brief, decision });
+      // Slice 4: spawn the worker for the Direct path. Non-blocking;
+      // the route handler returns immediately. See spawnSessionWorker
+      // header for the detached/unref'd lifecycle. NO spawn on the
+      // Bilby path below — that's Slice 5+ territory.
+      spawnSessionWorker(id);
       return NextResponse.json(
         {
           pipeline: decision.pipeline,

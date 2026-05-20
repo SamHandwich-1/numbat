@@ -17,6 +17,7 @@
     "db:seed:sessions": "tsx lib/supabase/seed-mock-sessions.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/supabase-js": "^2.45.4",

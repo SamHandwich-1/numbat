@@ -29,4 +29,8 @@ export const STATUS_TO_TOKEN: Record<SessionStatus, string> = {
   blocked: "--status-blocked",
   done: "--status-done",
   killed: "--status-killed",
+  // Slice 4: transient "stopping…" state. Maps to the same token as
+  // `killed` (dimmed grey) so the pill colour reads as terminal-ish,
+  // but the label in the UI is "killing" to communicate in-progress.
+  killing: "--status-killed",
 };

@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { Database, Decision } from "@/lib/types/db";
+import {
+  transitionToKilledDirectly,
+  transitionToKilling,
+} from "@/lib/supabase/mutations/session-status";
+import type { Database, Decision, SessionStatus } from "@/lib/types/db";
 import {
   DecisionPayload,
   type DecisionPayloadT,
@@ -22,33 +26,38 @@ export type RecordDecisionInput = {
  * Record an operator's review decision (Approve / Redirect / Kill)
  * and apply the matching session-status change in one helper.
  *
- * Status transitions (brief §11, Slice 3):
- *   approve  → status='done',   completed_at=now()
- *   kill     → status='killed', completed_at=now(), last_error populated
- *   redirect → session row unchanged (plan §8 Q1 = A)
+ * Status transitions (plan §2, two-phase kill):
+ *   approve  (awaiting_review)  → status='done',   completed_at=now()
+ *   redirect (awaiting_review)  → session row UNCHANGED (plan §8 Q1 = A)
+ *   kill     (idle | running)   → status='killing' (transient — worker
+ *                                  writes terminal 'killed' on teardown)
+ *   kill     (awaiting_review |
+ *             blocked)          → status='killed' DIRECT, completed_at,
+ *                                  last_error (no live worker to coord)
+ *   kill     (killing | done |
+ *             killed)           → THROW (kill already in flight or terminal)
  *
  * Two writes are non-atomic. Decision INSERT first (the audit log is
  * canonical even if the subsequent session UPDATE fails). If the
- * update fails after the decision lands, the session stays in
- * `awaiting_review` and the operator can retry. Single-operator V1
+ * update fails after the decision lands, the session stays in its
+ * prior state and the operator can retry. Single-operator V1
  * concession; matches the create-session.ts atomicity stance.
  *
  * Guards:
- *   - session must currently be in `awaiting_review` — review actions
- *     are only valid in this state. The UI never mounts ActionBar
- *     outside it; the throw is defence-in-depth against stale tabs
- *     and direct API calls.
- *   - DecisionPayload re-parsed inside this function. The route
- *     handler already parses; this is belt-and-braces in the spirit
- *     of llm-calls.ts:LlmCallError.parse.
+ *   - approve / redirect — session must be in 'awaiting_review'.
+ *   - kill — session must NOT be terminal (done/killed) or already
+ *     in-flight (killing). Valid source states: idle / running /
+ *     awaiting_review / blocked.
+ *   - DecisionPayload re-parsed defensively (route handler already
+ *     parses; this is belt-and-braces).
+ *   - payload.type must match the typed `type` field.
  */
 export async function recordDecision(
   db: SupabaseClient<Database>,
   input: RecordDecisionInput,
 ): Promise<Decision> {
   // Load the session — need project_id (FK on decisions) and status
-  // (guard). Other columns aren't read here, but `last_error: null` is
-  // implicit; the UPDATE branch sets it directly when needed.
+  // (guard).
   const { data: session, error: sessionError } = await db
     .from("sessions")
     .select("id, project_id, status")
@@ -60,11 +69,32 @@ export async function recordDecision(
   if (!session) {
     throw new Error(`recordDecision: session ${input.sessionId} not found`);
   }
-  if (session.status !== "awaiting_review") {
-    throw new Error(
-      `recordDecision: session ${input.sessionId} is ${session.status}, ` +
-        `not awaiting_review — review actions are only valid in awaiting_review`,
-    );
+
+  // Type-specific status guards. Approve / Redirect require
+  // awaiting_review; Kill is valid on any non-terminal-non-in-flight
+  // state. Throws keep the message containing 'awaiting_review' for
+  // the approve/redirect paths (existing test expectations).
+  if (input.type === "approve" || input.type === "redirect") {
+    if (session.status !== "awaiting_review") {
+      throw new Error(
+        `recordDecision: ${input.type} requires status awaiting_review, ` +
+          `got ${session.status}`,
+      );
+    }
+  } else {
+    // input.type === "kill"
+    const validKillStates: SessionStatus[] = [
+      "idle",
+      "running",
+      "awaiting_review",
+      "blocked",
+    ];
+    if (!validKillStates.includes(session.status as SessionStatus)) {
+      throw new Error(
+        `recordDecision: kill not valid from status ${session.status} ` +
+          `(must be one of ${validKillStates.join(", ")})`,
+      );
+    }
   }
 
   // Re-parse the payload through the canonical Zod schema.
@@ -98,9 +128,7 @@ export async function recordDecision(
     throw new Error("recordDecision: insert decision returned no row");
   }
 
-  // Apply the session-status change. Redirect intentionally leaves the
-  // row alone (plan §8 Q1 = A); Slice 4's worker flips status to
-  // `running` when it picks up the latest redirect decision.
+  // Apply the session-status change.
   const nowIso = new Date().toISOString();
   if (input.type === "approve") {
     const { error } = await db
@@ -115,9 +143,6 @@ export async function recordDecision(
       throw new Error(`recordDecision: approve session update — ${error.message}`);
     }
   } else if (input.type === "kill") {
-    // The discriminator guard above narrows parsedPayload to the kill
-    // variant; the runtime assertion below is a redundant guard the
-    // type system can't see through without a custom predicate.
     if (parsedPayload.type !== "kill") {
       throw new Error("recordDecision: kill payload narrow failed");
     }
@@ -126,20 +151,21 @@ export async function recordDecision(
       source: "operator",
       occurred_at: nowIso,
     };
-    const { error } = await db
-      .from("sessions")
-      .update({
-        status: "killed",
-        completed_at: nowIso,
-        updated_at: nowIso,
+
+    // Two-phase kill (plan §2): branch on current status.
+    if (session.status === "idle" || session.status === "running") {
+      // Live worker — write transient 'killing'. Worker tears down
+      // SDK and writes terminal 'killed' on completion.
+      await transitionToKilling(db, session.id, { last_error: lastError });
+    } else {
+      // status === 'awaiting_review' || 'blocked' (guarded above).
+      // No live worker — write terminal 'killed' directly.
+      await transitionToKilledDirectly(db, session.id, {
         last_error: lastError,
-      })
-      .eq("id", session.id);
-    if (error) {
-      throw new Error(`recordDecision: kill session update — ${error.message}`);
+      });
     }
   }
-  // redirect: no session UPDATE.
+  // redirect: no session UPDATE (plan §8 Q1 = A).
 
   return decision;
 }

@@ -1,17 +1,27 @@
-// Single-session detail / review page. Mocked Agent SDK output drives
-// the debrief and diff in Slice 3 — Slice 4 swaps the mock for a real
-// worktree parse + Opus debrief.
+// Single-session detail / review page.
 //
-// Status-driven branching (plan §3a):
-//   awaiting_review        → header + debrief + diff + <ActionBar/>
-//   done / killed          → header + debrief + diff + read-only banner
-//   idle / planning /
-//   running / blocked      → header + "not yet ready for review" placeholder
+// Slice 4 composition (Option A — real diff, mocked debrief):
+//   - DIFF field: read from session.diff (jsonb, written by the worker
+//     on transition to awaiting_review). Validated through the
+//     WorktreeDiff Zod schema at the boundary so a drift between the
+//     persisted shape and the consuming component surfaces as a parse
+//     error rather than a silent UI bug. null → empty-diff state.
+//   - DEBRIEF field: still from getMockedOutputForSession (mock).
+//     Slice 5 wires the real Opus debrief.
+//
+// Status-driven branching:
+//   awaiting_review              → header + debrief + real diff + <ActionBar/>
+//   done / killed                → header + debrief + real diff + TerminalBanner
+//   killing (transient)          → "Stopping…" placeholder (Slice 4 two-phase
+//                                  kill — worker is tearing down the SDK; the
+//                                  realtime subscriber will refresh when status
+//                                  flips to 'killed')
+//   idle / planning / running /
+//   blocked                      → NotReadyPlaceholder
 //
 // SessionStatusSubscriber mounts in every branch so a status change
-// elsewhere (the operator approving in another tab, a future Slice 4
-// worker flipping a session to awaiting_review, etc.) re-renders the
-// page within ~1s.
+// (worker writes, operator actions elsewhere) re-renders the page
+// within ~1s.
 
 import { notFound } from "next/navigation";
 
@@ -25,9 +35,15 @@ import { getMockedOutputForSession } from "@/lib/mock/agent-sdk-output";
 import { ContextLoader } from "@/lib/orchestration/context";
 import { getSession } from "@/lib/supabase/queries/sessions";
 import { sbAdmin } from "@/lib/supabase/server";
+import { WorktreeDiff, type WorktreeDiffT } from "@/lib/types/jsonb";
 import { STATUS_TO_TOKEN } from "@/lib/types/ui";
 
 const TERMINAL_STATUSES = new Set(["done", "killed"]);
+
+const EMPTY_DIFF: WorktreeDiffT = {
+  files: [],
+  totals: { files_changed: 0, additions: 0, deletions: 0 },
+};
 
 export default async function SessionDetailPage({
   params,
@@ -62,7 +78,13 @@ export default async function SessionDetailPage({
     session.id,
   );
 
+  // Compose: real diff from session.diff (parsed at the boundary),
+  // mock debrief from getMockedOutputForSession. The debrief mock is
+  // Slice 5's loose end — see lib/mock/agent-sdk-output.ts header.
   const mock = getMockedOutputForSession(session);
+  const realDiff: WorktreeDiffT =
+    session.diff !== null ? WorktreeDiff.parse(session.diff) : EMPTY_DIFF;
+
   const statusVar = `var(${STATUS_TO_TOKEN[session.status]})`;
   const statusLabel = session.status.replace(/_/g, " ");
 
@@ -104,7 +126,7 @@ export default async function SessionDetailPage({
               body={mock.debrief.new_concept.body}
             />
           )}
-          <DiffPreview diff={mock.diff} />
+          <DiffPreview diff={realDiff} />
 
           {session.status === "awaiting_review" ? (
             <ActionBar sessionId={session.id} skills={ctx.skills} />
@@ -112,10 +134,26 @@ export default async function SessionDetailPage({
             <TerminalBanner session={session} />
           )}
         </>
+      ) : session.status === "killing" ? (
+        <StoppingPlaceholder />
       ) : (
         <NotReadyPlaceholder statusLabel={statusLabel} />
       )}
     </main>
+  );
+}
+
+function StoppingPlaceholder() {
+  return (
+    <section
+      className="rounded-md border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground"
+      aria-live="polite"
+    >
+      <p className="font-mono uppercase tracking-wider">Stopping…</p>
+      <p className="mt-2 text-xs">
+        Operator kill received; waiting for the worker to confirm SDK teardown.
+      </p>
+    </section>
   );
 }
 
