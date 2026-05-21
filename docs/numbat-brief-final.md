@@ -604,3 +604,15 @@ Most prior open questions resolved by the dialectic. Remaining:
 3. **Update this brief** if the spike reveals surprises. Otherwise, proceed to Slice 1.
 4. **Build slices in order.** Each slice's acceptance criteria are the contract. Treat any new question as an Open Question for the spec rather than guessing.
 5. **Preserve the decisions record.** The decisions log lives at `docs/decisions/`, one file per entry, named `NNNN-slug.md`. `docs/decisions/0001-bootstrap-dialectic.md` is entry 1. An entry is either a Bilby dialectic (four labelled stages + Final Verdict, per the bootstrap example) or a single-decision record (a meaningful architectural or scope call, its reasoning, and outcome). This is distinct from `docs/dialectic/`, which holds the individual stage files of a single Bilby run, and from the DB `decisions` table that `pnpm export:decisions` reads. Numbat is built using Numbat's intended workflow — the log is the seed of every future calibration.
+
+---
+
+## 15 · Slice 4 close-out notes
+
+Slice 4 (live Agent SDK execution, worktree creation, diff capture, two-phase kill) shipped and was verified end-to-end against three real production runs. The close-out artefacts are:
+
+- `docs/decisions/0006-slice-4-close-out.md` — the slice close-out, including the live trace where the §23 kill-race invariant fired in production (run #2, session `a1435560`). The "read fresh DB state in catch blocks, not error strings" rule from that section is now a Numbat-wide convention.
+- `docs/decisions/0007-completed-at-semantics.md` — schema-semantic decision on `completed_at` and the two-cohort `cleanupStaleWorktrees` sweep that emerged from Slice 4.
+- `docs/decisions/0008-permission-config.md` — the §0a-bis security decision on the four-field permission config (`tools` + `allowedTools` + `disallowedTools` + `permissionMode: 'dontAsk'`). `lib/feathertail/permissions.ts` is frozen at this shape; any change requires a new decisions-log entry.
+
+Slice 4 also produced a Slice 5 carry list (captured in 0006's "Carried into Slice 5" section). Slice 5's plan will be drafted from that list.

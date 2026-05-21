@@ -53,6 +53,9 @@ Five layers:
 - Use Supabase realtime for any UI showing session or plan state. Never poll.
 - Log every LLM call to `llm_calls` (model, prompt hash, tokens, duration, cost, error).
 - Load project context via `ContextLoader` at every session and plan-stage boundary. Never reach across projects.
+- Pin `@anthropic-ai/claude-agent-sdk` at `0.3.143` in `package.json`. The decisions log (`0008-permission-config.md`) is keyed to this version's `.d.ts`; an SDK bump requires a fresh §0a-style audit and a successor decisions entry before merging.
+- Treat `lib/feathertail/permissions.ts` as frozen. Any change to the four-field shape (`tools` / `allowedTools` / `disallowedTools` / `permissionMode`) requires a new decisions-log entry superseding `0008`. The file's header comment block states this; the convention is recorded here for visibility.
+- Per-worker logs live SIBLING to the worktree, not inside it. The single source of truth is `workerLogPathFor(worktreePath)` in `lib/feathertail/worktree.ts` returning `<worktreePath>.log`. Both the writer (`scripts/session-runner.ts`) and the cleanup (`cleanupStaleWorktrees`) derive their path from the helper; never reconstruct the path elsewhere.
 - Apply migrations via `supabase/migrations/<NNNN>_<name>.sql` (Supabase CLI convention). One numbered SQL file per slice that touches the schema. `pnpm db:push` reads from there.
 - For Agent SDK session results: fan out `llm_calls` one row per (session, model) via `lib/supabase/llm-calls.ts:insertLlmCallsFromModelUsage`. Trust the SDK's per-model `costUSD` and `total_cost_usd` — no maintained price table for the Agent SDK path. (Bilby's direct Anthropic / xAI calls via the AI SDK still need one.)
 - For Tailwind v4 `@theme` tokens, use single-component names after the namespace (`--status-review`, not `--status-awaiting-review`). Tailwind v4's parser interprets a second hyphen after the namespace as a modifier separator — multi-hyphen tokens compile to nothing silently. Discovered during slice 2a step 5 visual check. The `STATUS_TO_TOKEN` map in `lib/types/ui.ts` isolates the workaround.
@@ -73,6 +76,7 @@ Five layers:
 - **Retry:** Max 2 retries on network errors with exponential backoff (1s, 2s). No retry on 4xx responses.
 - **Failure modes:** An LLM call failure writes a row to `llm_calls` with `error` populated and updates the parent session/plan status. The UI shows the error inline; the loop fails open (the user can redirect or kill).
 - **Session worker crash:** The parent session row is marked `blocked` with `last_error` populated. The user is notified via realtime.
+- **Kill-race recovery.** Catch blocks that handle transition-helper throws under a possible kill race MUST re-read fresh DB state (e.g. `sessions.status`) to decide recovery action. NEVER parse the thrown error's message — error strings are incidental copy in the transition helpers and break when the wording changes. The two-phase kill (`running` → `killing` → `killed`) depends on this; the convention is recorded in `docs/decisions/0006-slice-4-close-out.md` and was proven live in run #2.
 
 ## Single-operator assumptions (V1)
 
