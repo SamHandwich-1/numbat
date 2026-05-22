@@ -106,13 +106,36 @@ export const LlmCallError = z.object({
 });
 
 // plan_stages.content — discriminated union by action.
-// Permissive stub shapes for V1; Slice 6 (Bilby) tightens each variant
-// when the dialectic prompts are written.
+//
+// The four Bilby dialectic actions (draft, critique, consider, validate)
+// carry full audit fields — the prompt sent to the model, the response,
+// model id, finish reason, and an optional error if the call failed
+// after retries. These shapes were tightened in the proto-Bilby script
+// (scripts/bilby-dialectic.ts); the Stage 6 schema-tightening note in
+// the prior comment is closed out by this commit.
+//
+// `execute` and `debrief` belong to Feathertail (Slice 3+) and keep the
+// permissive `markdown` shape until those flows tighten their schemas.
+const BilbyAuditFields = {
+  prompt: z.string(),
+  response: z.string(),
+  model: z.string(),
+  finish_reason: z.string(),
+  error: z
+    .object({
+      message: z.string(),
+      subtype: z.string().optional(),
+      terminal_reason: z.string().optional(),
+      errors: z.array(z.string()).optional(),
+    })
+    .optional(),
+};
+
 export const PlanStageContent = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("draft"), markdown: z.string() }),
-  z.object({ action: z.literal("critique"), markdown: z.string() }),
-  z.object({ action: z.literal("consider"), markdown: z.string() }),
-  z.object({ action: z.literal("validate"), markdown: z.string() }),
+  z.object({ action: z.literal("draft"), ...BilbyAuditFields }),
+  z.object({ action: z.literal("critique"), ...BilbyAuditFields }),
+  z.object({ action: z.literal("consider"), ...BilbyAuditFields }),
+  z.object({ action: z.literal("validate"), ...BilbyAuditFields }),
   z.object({ action: z.literal("execute"), markdown: z.string() }),
   z.object({ action: z.literal("debrief"), markdown: z.string() }),
 ]);
