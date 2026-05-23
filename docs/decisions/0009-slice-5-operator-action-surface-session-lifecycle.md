@@ -19,6 +19,8 @@
 
 ### A. FK behaviour for `decisions.session_id` and `decisions.plan_id` → **PRESERVE (SET NULL)**
 
+> [Resolved during Step 0a; see "Step 0a schema audit" §A below — `decisions.payload jsonb` already exists and is actively populated, so the snapshot mechanism is a Zod schema extension to `DecisionPayload`, not new columns. The §A discussion below remains as the question the dialectic identified; the audit section is the answer.]
+
 Cascade is the wrong call here, even though `llm_calls.session_id` cascades. Decisions are a different kind of record. `llm_calls` are mechanical artifacts of a session's existence — if the session is gone, the calls have no referent and no independent meaning. Decisions are *operator acts*: a kill, a redirect, a routing choice. The whole point of writing them down is that they survive the thing they were about. Deleting a session and silently erasing the record of why you killed it last week is the inverse of what an audit log is for.
 
 The "manual two-step that bit three deletion paths" is a real pain, but the fix is `ON DELETE SET NULL` on both FKs plus a denormalized `decisions.session_label` / `decisions.plan_label` snapshot column captured at insert time, so a decision remains legible after its referent is gone. That's one migration, and it makes delete a one-step operation again *without* losing the trail.
@@ -129,6 +131,8 @@ Anything else stays in the operator / Claude-Code loop.
 - **The `session_label` snapshot approach is a design call I'm making without seeing the current `decisions` schema.** If there's already a `context` JSON column or similar, the snapshot might belong there rather than as new columns. Verify before migration.
 - **The router.ts tripwire's CI mechanism is hand-waved.** "A lint rule or a CI grep" — I don't know what this codebase's CI surface looks like. The comment block ships in Slice 5; the enforcement might slip to Slice 6 if it turns out to need real infrastructure.
 - **The plan/decisions FK has the same shape of argument as session/decisions, and I applied A symmetrically (SET NULL for both), but plans may have different audit semantics I'm not seeing.** The brief says "one decision, both columns" — I've taken that as license to apply the same answer, but if plan-deletion is supposed to be rare and ceremonial in a way session-deletion isn't, cascade might be defensible for plans alone. Flagging.
+
+  > [Resolved during Step 0a; see "Step 0a schema audit" §C below — plan-side FK semantics are symmetric with session-side in live data (7 plans, 21 sessions; both routine; both FKs already exercise NULL state). SET NULL applies to both `decisions.session_id` and `decisions.plan_id`, exactly as draft §A asserted before Stage 2 walked it back.]
 - **I did not propose anything about ContextLoader.** The constraints forbid extending it, and nothing in the spine requires it. If the dismiss UI or ActionBar surfaces a need for it (e.g. context-aware action labels), that's a re-plan, not a Slice 5 addition.
 - **No estimate of slice size.** Steps 1, 3, 5, 6 are each non-trivial. This may be a large slice. If it needs to split, the cleanest cut is after step 6: spine 1+3 in 5a, spine 4 + start-work + router doc in 5b. I'm not recommending the split yet, but flagging it as the prepared retreat.
 
@@ -298,6 +302,8 @@ Steps 1–6 otherwise unchanged.
 *Kept:* the router.ts CI mechanism is unknown (now resolved by deferring enforcement to Slice 6).
 *Kept:* plan-side FK semantics may differ (now resolved into the audit).
 *Kept:* no ContextLoader proposals.
+
+> [Resolved during Step 0a; see "Step 0a schema audit" §E below — §10 ContextLoader extension needs no schema changes; the existing `decisions_project_idx` supports `recent_decisions` cleanly. The fold-in decision becomes a code-organisation question rather than a schema-and-code question.]
 *Kept:* slice-size flag and split-trigger; the trigger is now concrete (audit outcome) rather than vibe-based.
 
 ---
@@ -331,3 +337,55 @@ Ship it. The plan now contains the missing schema prerequisite, the mutation aud
      empty. Add meta-observations only when a particular dialectic earned
      them (cross-family catches worth recording, calibration findings,
      surprising rejections, etc.). -->
+
+---
+
+## Step 0a schema audit
+
+> **Date:** 2026-05-22. Sources: `supabase/migrations/0001_initial.sql` through `0006_slice4_status_killing_and_diff.sql` for shape; live Supabase data via a throwaway audit script for counts (script deleted after run).
+
+### A. `decisions` table shape
+
+The `decisions` table is defined in migration 0001 with columns `id uuid`, `project_id uuid (references projects(id) on delete cascade)`, `session_id uuid (references sessions(id))`, `plan_id uuid (references plans(id))`, `type text` (a check-constrained enum extended in 0005 to include `'start_work'`), `context text`, `payload jsonb`, and `created_at timestamptz`. Critically, both `session_id` and `plan_id` FKs are declared without an `ON DELETE` clause — Postgres defaults to `NO ACTION`, which is what blocks naïve `DELETE FROM sessions` / `DELETE FROM plans` and forced the two-step pattern on three prior cleanup paths (Slice 4 session dispositions, orphan Bilby plan delete, bilby-dialectic verification plan disposition). There is exactly one secondary index, `decisions_project_idx` on `(project_id, created_at desc)`.
+
+The load-bearing finding: **`payload jsonb` already exists and is actively used.** Sampling the ten most-recent rows shows every decision row has `payload` populated, keyed by `type` per the discriminated union in `lib/types/jsonb.ts`. Current variants in live data: `start_work` (carries `routed_to`, `matched_rule`, `reason`), `kill` (carries `reason`), `redirect` (carries `reply_text`), `approve` (just `type`). The `context text` column is also populated but only for `start_work` rows (lengths 19–280 chars; appears to carry the original brief or routing context); it's empty for kill/approve/redirect. This means 0009 §A's snapshot-mechanism question has a clean answer: **extend the existing `payload jsonb` shape with optional `session_label` / `plan_label` fields**, not add new columns. The Zod discriminated union in `lib/types/jsonb.ts:DecisionPayload` is the single point of change; no migration on the decisions table itself is required for the snapshot fields. The schema change reduces to one ALTER for each FK (`DROP CONSTRAINT … ADD CONSTRAINT … ON DELETE SET NULL`).
+
+### B. `sessions` table shape
+
+The `sessions` table carries `id`, `project_id` (cascade on delete), `slice_name text` (the obvious snapshot candidate — operator-readable, populated on every row), `worktree_path`, `task`, `status` (check-constrained enum, extended in 0006 to include `'killing'`), `current_step`, `blocking_reason`, `spec_id`, `agent_session_id`, `last_error jsonb`, `created_at`, `updated_at`, `completed_at`, and (Slice 4 addition) `diff jsonb`. There is no `dismissed_at` column — the spine-3 work adds it. The `slice_name` field is the unambiguous snapshot source for `decisions.payload.session_label`; no name/title field collision concerns.
+
+`decisions.session_id`'s FK behaviour is currently `NO ACTION` (Postgres default for an undeclared `ON DELETE`). For context: `llm_calls.session_id` was changed to `ON DELETE CASCADE` in migration 0002 with the rationale *"llm_calls are derived from session activity; when a session is deleted, its llm_calls are meaningless on their own. Audit trail lives in the decisions table (project-scoped)."* That comment is the codebase's prior position on cascade-vs-preserve, and it explicitly designates `decisions` as the survival path. 0009 §A's SET-NULL choice for `decisions.session_id` is consistent with this comment — `decisions` is meant to outlive its referents.
+
+### C. `plans` table shape + plan-side FK semantics comparison
+
+The `plans` table is small and tightly scoped: `id`, `project_id` (cascade), `title text`, `brief text`, `status` (check-constrained enum), `created_at`, `updated_at`, plus `spec_id` added via trailing `ALTER TABLE` (circular FK with `specs`). `title` is the obvious snapshot candidate. No fields overlap with the proposed `session_label` / `plan_label` snapshot machinery.
+
+On plan-side vs session-side FK semantics: the symmetry holds in the current data. The decisions table has 12 rows with `plan_id IS NULL` and 6 rows with `session_id IS NULL` — both states are already valid in the table; SET NULL on either FK doesn't violate any existing invariant. The plan-side semantics are not meaningfully different from session-side in current usage: every `start_work` decision targets exactly one of the two FKs (Direct path → `session_id`, Bilby path → `plan_id`), and the rationale for preserving decisions across delete is identical in both directions (kill/redirect for sessions, routing/ship for plans, all of which the operator might want to audit after the parent is gone). 0009 Stage 3's lazy-symmetry concession (*"if plan deletion is genuinely ceremonial and rare in current usage, the cascade-vs-preserve trade may resolve differently for plans"*) doesn't fire — plan deletion is no more ceremonial than session deletion in the live data (7 plans, 21 sessions; both routine). **Recommendation: apply SET NULL symmetrically to both FKs**, exactly as 0009 §A proposed at draft time before Stage 2 walked it back to "flagged for re-check."
+
+### D. Row counts
+
+The data volume is small enough that migration cost is bounded by code complexity, not row count:
+
+| Query | Count |
+|---|---|
+| `decisions WHERE session_id IS NULL` | 6 |
+| `decisions WHERE plan_id IS NULL` | 12 |
+| `sessions WHERE status IN ('done', 'killed', 'blocked')` | 7 |
+| `plans WHERE status IN ('ready', 'shipped', 'abandoned')` | 1 |
+| `decisions` total | 18 |
+| `sessions` total | 21 |
+| `plans` total | 7 |
+| `llm_calls` total | 10 |
+| `plan_stages` total | 4 |
+
+Backfill on the `dismissed_at` column for existing terminal session rows is a 7-row UPDATE setting NULL (which is the default for a new column anyway — backfill is effectively a no-op). The orphan-by-NULL count on `decisions.session_id` (6 rows) confirms that the SET NULL state is already exercised in the table, so the new FK behaviour produces nothing semantically novel — it just makes the orphan path automatic rather than manual.
+
+### E. §10 ContextLoader fold-in feasibility
+
+The recent-decisions portion of the §10 bundle is *"top 30 decisions for a project, ordered by `created_at` desc"*. The existing `decisions_project_idx` on `(project_id, created_at desc)` (migration 0001 line 117) is exactly the index this query wants — no schema change is needed to support the read pattern. Project-by-project decisions counts in current data: numbat 15, alice-os 2, bowerbird 1, wedgetail 0. All four projects are well under the 30-row limit, so the query's `LIMIT 30` is a non-binding cap in current state and remains cheap as data grows. The `specs` and `skills` portions of the §10 bundle are also already queryable against existing tables (`specs` has `project_id` cascade-FK + `version`; `skills` has `project_id` + `usage_count desc` index).
+
+The schema audit's view is that **§10 extension does not require schema changes**. ContextLoader can be extended with a `'plan-stage'` scope that runs four queries (CLAUDE.md from `projects.claude_md`, specs by project, skills by project, top-30 decisions by project) against the current tables, no migration. This means the fold-in question becomes a pure code-organisation question rather than a schema-and-code question. **Recommendation: still hold the fold-in decision until the FK migration is drafted and reviewed** (the migration code may surface secondary concerns this audit doesn't see), but the schema side is no longer a gate. If the FK migration is short and clean — which §A and §C suggest it is — then folding the §10 query layer into the same code-change has the right grain.
+
+### Split gate verdict
+
+**STAY WHOLE.** The data-driven trigger that 0009 §sequencing named for splitting into 5a/5b — *"if the audit reveals the FK migration is non-trivial (e.g. existing data quality issues, decisions table is bigger than expected, plan-side FK has different semantics than session-side)"* — does not fire. The decisions table is 18 rows; the migration is two ALTER statements (one per FK column); plan-side semantics are not meaningfully different from session-side; the snapshot mechanism reduces to a Zod schema extension on the existing `payload jsonb` column rather than new columns; the §10 extension is feasible without schema changes. Spine 2 (FK migration + snapshot preservation) is small enough that bundling it with spine 1 + 3 + 4 in a single slice does not concentrate risk, and the prepared-retreat option (split if 0a surfaces non-trivial cost) was correctly defined but does not need to fire. Slice 5 proceeds as one slice.
