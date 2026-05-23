@@ -61,6 +61,86 @@ describe("DecisionPayload (Slice 3 variants)", () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Slice 5 step 1 — DecisionPayload snapshot fields (session_label /
+// plan_label). Extended on four variants currently in live use:
+// approve, redirect, kill, start_work. The tests assert both:
+//   - backward compat: pre-Slice-5 payloads (no snapshot fields) parse
+//   - forward compat:  new payloads (with both snapshot fields) parse
+// ─────────────────────────────────────────────────────────────────────
+
+describe("DecisionPayload (Slice 5 snapshot fields)", () => {
+  const SNAPSHOT_BOTH = {
+    session_label: "fix-typo-in-footer-a1b2c3",
+    plan_label: "Slice 5 — operator action surface",
+  } as const;
+
+  it("approve — backward compat (no snapshot fields) parses", () => {
+    expect(DecisionPayload.safeParse({ type: "approve" }).success).toBe(true);
+  });
+
+  it("approve — forward compat (with both snapshot fields) parses", () => {
+    expect(
+      DecisionPayload.safeParse({ type: "approve", ...SNAPSHOT_BOTH }).success,
+    ).toBe(true);
+  });
+
+  it("redirect — backward compat parses", () => {
+    expect(
+      DecisionPayload.safeParse({ type: "redirect", reply_text: "x" }).success,
+    ).toBe(true);
+  });
+
+  it("redirect — forward compat (with both snapshot fields) parses", () => {
+    expect(
+      DecisionPayload.safeParse({
+        type: "redirect",
+        reply_text: "x",
+        ...SNAPSHOT_BOTH,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("kill — backward compat parses", () => {
+    expect(
+      DecisionPayload.safeParse({ type: "kill", reason: "scope" }).success,
+    ).toBe(true);
+  });
+
+  it("kill — forward compat (with both snapshot fields) parses", () => {
+    expect(
+      DecisionPayload.safeParse({
+        type: "kill",
+        reason: "scope",
+        ...SNAPSHOT_BOTH,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("start_work — backward compat parses", () => {
+    expect(
+      DecisionPayload.safeParse({
+        type: "start_work",
+        routed_to: "direct",
+        matched_rule: "length_under_200",
+        reason: "short brief",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("start_work — forward compat (with both snapshot fields) parses", () => {
+    expect(
+      DecisionPayload.safeParse({
+        type: "start_work",
+        routed_to: "direct",
+        matched_rule: "length_under_200",
+        reason: "short brief",
+        ...SNAPSHOT_BOTH,
+      }).success,
+    ).toBe(true);
+  });
+});
+
 describe("SessionLastError", () => {
   it("accepts the new 'operator' source value used by Kill", () => {
     const result = SessionLastError.safeParse({

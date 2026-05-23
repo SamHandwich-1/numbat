@@ -68,10 +68,47 @@ export const SpecOpenQuestions = z.array(
 // add a rule there, add the literal here. No codebase pattern yet
 // for auto-deriving zod enums from TS unions; this comment is the
 // V1 guarantee.
+//
+// Slice 5 step 1 — snapshot fields. Added to the four variants
+// currently in live use (approve, redirect, kill, start_work) so the
+// decision row stays legible after its FK referent is deleted:
+//
+//   - session_label: snapshot of sessions.slice_name at decision-insert
+//     time. Not a live reference; renames after insert are not tracked.
+//   - plan_label:    snapshot of plans.title at decision-insert time.
+//   - Both are NULL-allowed (decision targeted a side that has no parent,
+//     or the parent's source field was empty). Render NULL as
+//     `<unnamed session>` / `<unnamed plan>` in UI.
+//
+// Backed by ON DELETE SET NULL on both decisions.session_id and
+// decisions.plan_id per migration 0007 — the labels persist after the
+// parent row is deleted, which is the whole point.
+//
+// The other four variants (accept_critique, reject_critique, ship,
+// edit_spec) are Bilby-pipeline-related and don't yet appear in live
+// decision rows per Step 0a §A's sample. They're left unextended for
+// now; extend them when a Bilby flow produces snapshot-relevant rows.
+const DecisionSnapshotFields = {
+  session_label: z.string().optional(),
+  plan_label: z.string().optional(),
+};
+
 export const DecisionPayload = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("approve"), note: z.string().optional() }),
-  z.object({ type: z.literal("redirect"), reply_text: z.string() }),
-  z.object({ type: z.literal("kill"), reason: z.string() }),
+  z.object({
+    type: z.literal("approve"),
+    note: z.string().optional(),
+    ...DecisionSnapshotFields,
+  }),
+  z.object({
+    type: z.literal("redirect"),
+    reply_text: z.string(),
+    ...DecisionSnapshotFields,
+  }),
+  z.object({
+    type: z.literal("kill"),
+    reason: z.string(),
+    ...DecisionSnapshotFields,
+  }),
   z.object({ type: z.literal("accept_critique"), critique_id: z.string() }),
   z.object({
     type: z.literal("reject_critique"),
@@ -94,6 +131,7 @@ export const DecisionPayload = z.discriminatedUnion("type", [
       "manual",
     ]),
     reason: z.string(),
+    ...DecisionSnapshotFields,
   }),
 ]);
 
