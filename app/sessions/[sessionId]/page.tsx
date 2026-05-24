@@ -23,6 +23,7 @@
 // (worker writes, operator actions elsewhere) re-renders the page
 // within ~1s.
 
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ActionBar } from "@/components/review/action-bar";
@@ -103,6 +104,20 @@ export default async function SessionDetailPage({
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
+      {/* Slice 5 polish: back-link to the Sessions list. Plain Next <Link>
+          to /sessions — V1 trim accepts loss of the source URL's filter
+          state (?project=, ?status=, ?dismissed=show). Smarter back-link
+          (router.back / referrer-aware) earns its weight when the list
+          gains pagination or search; until then, default-filtered return
+          covers the dominant usage pattern. self-start constrains the
+          link to content width inside the flex-col main. */}
+      <Link
+        href="/sessions"
+        className="self-start text-sm text-muted-foreground hover:text-foreground"
+      >
+        ← Sessions
+      </Link>
+
       <SessionStatusSubscriber sessionId={session.id} />
 
       <header className="flex flex-col gap-2 border-b border-border pb-4">

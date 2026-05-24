@@ -78,7 +78,14 @@ export default async function SessionsPage({
       <div className="border-b border-border pb-4">
         <StartWorkInput projects={projects} />
       </div>
-      <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+      {/* Slice 5 polish: filter row sticks below the app header so it stays
+          reachable while scrolling the list. `top-9` (36px) matches the
+          app header's rendered height (sticky top-0 z-40 in app/layout.tsx
+          — py-2 + small-text content ≈ 36px). `z-10` sits in the app's
+          stacking order: below the header (z-40) and shadcn popovers
+          (z-50), above page content. `bg-background` is opaque so the
+          scrolling list doesn't bleed through. */}
+      <div className="sticky top-9 z-10 flex flex-wrap gap-2 bg-background sm:flex-nowrap">
         <ProjectFilter projects={projects} />
         <StatusFilter />
         <ShowDismissedToggle />
