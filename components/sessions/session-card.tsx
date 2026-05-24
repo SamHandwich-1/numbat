@@ -16,7 +16,12 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { STATUS_TO_TOKEN } from "@/lib/types/ui";
 import type { Project, Session } from "@/lib/types/db";
+import {
+  deriveSessionAffordances,
+  shouldMountDismissButton,
+} from "@/lib/orchestration/affordances";
 import { Card } from "@/components/ui/card";
+import { DismissButton } from "@/components/sessions/dismiss-button";
 import { FocusChipButton } from "@/components/sessions/focus-chip-button";
 import { RelativeTime } from "@/components/sessions/relative-time";
 
@@ -33,6 +38,14 @@ export function SessionCard({
     session.status === "done" ? "✓" : session.status === "killed" ? "×" : null;
   const statusVar = `var(${STATUS_TO_TOKEN[session.status]})`;
   const statusLabel = session.status.replace(/_/g, " ");
+
+  // Slice 5: the DismissButton client island mounts when either the
+  // dismiss or undismiss affordance is true (mutually exclusive by
+  // construction). Placement: top-right beside the timestamp (option
+  // A from the 4b plan — smallest visual footprint, sits with
+  // metadata, no hover-state JS).
+  const affordances = deriveSessionAffordances(session);
+  const showDismiss = shouldMountDismissButton(affordances);
 
   return (
     <Card
@@ -71,6 +84,9 @@ export function SessionCard({
         <span className="ml-auto font-mono text-xs text-muted-foreground">
           {statusLabel} · <RelativeTime iso={session.updated_at} />
         </span>
+        {showDismiss && (
+          <DismissButton session={session} affordances={affordances} />
+        )}
       </div>
 
       <Link

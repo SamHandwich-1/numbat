@@ -68,4 +68,75 @@ describe.skipIf(!haveCreds)("listSessions (live DB)", () => {
     expect(sessions.every((s) => s.project_id === targetId)).toBe(true);
     expect(sessions.some((s) => s.project_id === otherId)).toBe(false);
   });
+
+  // ───────────────────────────────────────────────────────────────────
+  // Slice 5 step 4b — includeDismissed filter. Default behaviour hides
+  // dismissed_at-populated rows; passing includeDismissed: true lifts
+  // the filter (no IS NOT NULL — both visible).
+  // ───────────────────────────────────────────────────────────────────
+
+  test("default filter excludes dismissed sessions", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+    const { listSessions } = await import("@/lib/supabase/queries/sessions");
+
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const projectId = await insertProjectFixture(sbAdmin, {
+      short_code: `D${suffix}`,
+    });
+    insertedProjectIds.push(projectId);
+
+    const liveId = await insertSessionFixture(sbAdmin, {
+      project_id: projectId,
+      slice_name: `fixture-live-${suffix}`,
+    });
+    const dismissedId = await insertSessionFixture(sbAdmin, {
+      project_id: projectId,
+      slice_name: `fixture-dismissed-${suffix}`,
+      status: "done",
+      dismissed_at: new Date().toISOString(),
+    });
+
+    const { sessions } = await listSessions({
+      projectShortCode: `D${suffix}`,
+    });
+    const ids = sessions.map((s) => s.id);
+    expect(ids).toContain(liveId);
+    expect(ids).not.toContain(dismissedId);
+  });
+
+  test("includeDismissed: true lifts the filter (both visible)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+    const { listSessions } = await import("@/lib/supabase/queries/sessions");
+
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const projectId = await insertProjectFixture(sbAdmin, {
+      short_code: `I${suffix}`,
+    });
+    insertedProjectIds.push(projectId);
+
+    const liveId = await insertSessionFixture(sbAdmin, {
+      project_id: projectId,
+      slice_name: `fixture-live-${suffix}`,
+    });
+    const dismissedId = await insertSessionFixture(sbAdmin, {
+      project_id: projectId,
+      slice_name: `fixture-dismissed-${suffix}`,
+      status: "done",
+      dismissed_at: new Date().toISOString(),
+    });
+
+    const { sessions } = await listSessions({
+      projectShortCode: `I${suffix}`,
+      includeDismissed: true,
+    });
+    const ids = sessions.map((s) => s.id);
+    expect(ids).toContain(liveId);
+    expect(ids).toContain(dismissedId);
+  });
 });

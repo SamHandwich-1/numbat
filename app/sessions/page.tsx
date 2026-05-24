@@ -10,9 +10,16 @@ import type { SessionStatus } from "@/lib/types/db";
 import { FocusBanner } from "@/components/sessions/focus-banner";
 import { ProjectFilter } from "@/components/sessions/project-filter";
 import { SessionList } from "@/components/sessions/session-list";
+import { ShowDismissedToggle } from "@/components/sessions/show-dismissed-toggle";
 import { StartWorkInput } from "@/components/sessions/start-work-input";
 import { StatusFilter } from "@/components/sessions/status-filter";
 
+// All eight SessionStatus values are accepted as URL filter values.
+// `killing` is the Slice 4 transient state — it's not exposed as a
+// user-pickable chip in StatusFilter (which uses STATUS_ORDER), but a
+// URL like `?status=killing` is still valid and should resolve. Prior
+// to Slice 5 this set silently rejected `killing`; the inclusion here
+// is the fix.
 const KNOWN_STATUSES: ReadonlySet<SessionStatus> = new Set([
   "idle",
   "planning",
@@ -21,6 +28,7 @@ const KNOWN_STATUSES: ReadonlySet<SessionStatus> = new Set([
   "blocked",
   "done",
   "killed",
+  "killing",
 ]);
 
 function isSessionStatus(s: string): s is SessionStatus {
@@ -35,6 +43,7 @@ export default async function SessionsPage({
     project?: string;
     status?: string;
     focus?: string;
+    dismissed?: string;
   }>;
 }) {
   // Awaiting searchParams forces dynamic rendering, which lets
@@ -47,6 +56,10 @@ export default async function SessionsPage({
   const filters: SessionFilters = {};
   if (sp.project) filters.projectShortCode = sp.project;
   if (sp.status && isSessionStatus(sp.status)) filters.status = sp.status;
+  // Slice 5: default Sessions list filters `dismissed_at IS NULL`;
+  // `?dismissed=show` lifts the filter (per 0009 §D + Stage 3). Any
+  // other value falls through to the default (filter on).
+  if (sp.dismissed === "show") filters.includeDismissed = true;
 
   // Fan out the two queries the page actually consumes. listSessions
   // returns an embedded project subset; listProjects returns the
@@ -68,6 +81,7 @@ export default async function SessionsPage({
       <div className="flex flex-wrap gap-2 sm:flex-nowrap">
         <ProjectFilter projects={projects} />
         <StatusFilter />
+        <ShowDismissedToggle />
       </div>
       <FocusBanner projects={projects} />
       <SessionList initialSessions={sessions} projects={projects} />

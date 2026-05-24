@@ -1,27 +1,40 @@
 "use client";
 
-// Three-button review action bar. Owns the local sub-flow state —
-// which of {none, approve-confirm, redirect-composer, kill-confirm}
-// is currently open. Approve and Kill use small inline confirms
-// (Approve's note is optional; Kill's reason is required). Redirect
-// reveals the ReplyComposer.
+// Status-aware review action bar. Mounts whenever
+// `shouldMountActionBar(affordances)` is true (approve || redirect ||
+// kill) — Slice 5 step 4b widened this from the awaiting_review-only
+// mount to any non-terminal-non-dismissed session that has at least
+// one of the three review actions available.
 //
-// On a successful Approve / Kill the parent session row flips
-// terminal; the page's SessionStatusSubscriber sees the realtime
-// UPDATE and calls router.refresh(), at which point the RSC re-
-// renders with the read-only banner and this component unmounts.
-// Redirect intentionally does NOT change session state (plan §8
-// Q1 = A) — the composer just clears and the sub-flow closes.
+// Buttons render conditionally per the affordances record; the sub-flow
+// state machine for the inline confirm / composer is unchanged. Submit
+// path is POST /api/sessions/[sessionId]/decisions with payload built
+// from local state plus the session_label snapshot for the step-1
+// audit-preservation contract.
 //
-// 375px: action row stacks vertical; each button is w-full. md+:
-// row, right-aligned, primary at the right edge.
+// V1 trim: dismiss/undismiss don't render here. They're list-only per
+// docs/decisions/0009-slice-5-...md §D — the detail-page bar surfaces
+// only the three review actions. The DismissButton island on
+// SessionCard handles those.
+//
+// On a successful Approve / Kill the parent session row flips terminal;
+// the page's SessionStatusSubscriber sees the realtime UPDATE and calls
+// router.refresh(), at which point the RSC re-renders, the affordances
+// recompute (approve/redirect/kill all false on terminal), and this
+// component unmounts via the page's shouldMountActionBar gate. Redirect
+// intentionally does NOT change session state (plan §8 Q1 = A) — the
+// composer just clears and the sub-flow closes.
+//
+// 375px: action row stacks vertical; each button is w-full. md+: row,
+// right-aligned, primary at the right edge.
 
 import { useState } from "react";
 
 import { ReplyComposer } from "@/components/review/reply-composer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { Skill } from "@/lib/types/db";
+import type { SessionAffordances } from "@/lib/orchestration/affordances";
+import type { Session, Skill } from "@/lib/types/db";
 
 type Mode = "none" | "approve" | "redirect" | "kill";
 
@@ -30,11 +43,13 @@ type SubmitArgs =
   | { type: "kill"; reason: string };
 
 export function ActionBar({
-  sessionId,
+  session,
   skills,
+  affordances,
 }: {
-  sessionId: string;
+  session: Session;
   skills: readonly Skill[];
+  affordances: SessionAffordances;
 }) {
   const [mode, setMode] = useState<Mode>("none");
   const [note, setNote] = useState("");
@@ -53,13 +68,17 @@ export function ActionBar({
     setInFlight(true);
     setError(null);
     try {
+      // Snapshot capture per step-1 contract — populated at decision-
+      // insert time from the current slice_name. Identical pattern to
+      // the DismissButton island.
+      const sessionLabel = session.slice_name;
       const payload =
         args.type === "approve"
           ? args.note
-            ? { type: "approve" as const, note: args.note }
-            : { type: "approve" as const }
-          : { type: "kill" as const, reason: args.reason };
-      const res = await fetch(`/api/sessions/${sessionId}/decisions`, {
+            ? { type: "approve" as const, note: args.note, session_label: sessionLabel }
+            : { type: "approve" as const, session_label: sessionLabel }
+          : { type: "kill" as const, reason: args.reason, session_label: sessionLabel };
+      const res = await fetch(`/api/sessions/${session.id}/decisions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: args.type, payload }),
@@ -76,9 +95,11 @@ export function ActionBar({
         setInFlight(false);
         return;
       }
-      // Success: the session row flips terminal, realtime UPDATE fires,
-      // page refreshes, this component unmounts. Don't reset state —
-      // the unmount cleans up.
+      // Success: the session row flips terminal (or stays at the same
+      // state for redirect), realtime UPDATE fires, page refreshes,
+      // affordances recompute, this component re-renders or unmounts
+      // per shouldMountActionBar. Don't reset state — the re-render
+      // cleans up.
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       setError(msg);
@@ -89,7 +110,7 @@ export function ActionBar({
   if (mode === "redirect") {
     return (
       <ReplyComposer
-        sessionId={sessionId}
+        sessionId={session.id}
         skills={skills}
         onClose={reset}
       />
@@ -192,32 +213,38 @@ export function ActionBar({
     );
   }
 
-  // mode === "none"
+  // mode === "none" — render the affordances-driven button row.
   return (
     <div className="flex flex-col gap-2 md:flex-row md:justify-end md:gap-3">
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => setMode("kill")}
-        className="w-full md:w-auto"
-      >
-        Kill
-      </Button>
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={() => setMode("redirect")}
-        className="w-full md:w-auto"
-      >
-        Redirect
-      </Button>
-      <Button
-        type="button"
-        onClick={() => setMode("approve")}
-        className="w-full md:w-auto"
-      >
-        Approve
-      </Button>
+      {affordances.kill && (
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => setMode("kill")}
+          className="w-full md:w-auto"
+        >
+          Kill
+        </Button>
+      )}
+      {affordances.redirect && (
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setMode("redirect")}
+          className="w-full md:w-auto"
+        >
+          Redirect
+        </Button>
+      )}
+      {affordances.approve && (
+        <Button
+          type="button"
+          onClick={() => setMode("approve")}
+          className="w-full md:w-auto"
+        >
+          Approve
+        </Button>
+      )}
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveSessionAffordances,
+  shouldMountActionBar,
+  shouldMountDismissButton,
   type SessionAffordances,
 } from "@/lib/orchestration/affordances";
 import type { SessionStatus } from "@/lib/types/db";
@@ -146,6 +148,93 @@ describe("deriveSessionAffordances", () => {
       expect(result).toEqual(row.expected);
     });
   }
+
+  // Step 4b — render-branching predicates. Pure OR-logic over the
+  // affordances record. The 16-row table above exercises the
+  // affordances themselves; these focus on the call-site OR pattern.
+
+  describe("shouldMountActionBar (detail-page predicate)", () => {
+    it("true when approve is true (awaiting_review session)", () => {
+      const a: SessionAffordances = {
+        approve: true,
+        redirect: true,
+        kill: true,
+        dismiss: false,
+        undismiss: false,
+      };
+      expect(shouldMountActionBar(a)).toBe(true);
+    });
+
+    it("true when only kill is true (idle/running/blocked session)", () => {
+      const a: SessionAffordances = {
+        approve: false,
+        redirect: false,
+        kill: true,
+        dismiss: false,
+        undismiss: false,
+      };
+      expect(shouldMountActionBar(a)).toBe(true);
+    });
+
+    it("false on a terminal session (only dismiss/undismiss possible)", () => {
+      const a: SessionAffordances = {
+        approve: false,
+        redirect: false,
+        kill: false,
+        dismiss: true,
+        undismiss: false,
+      };
+      // V1 trim: dismiss is list-only, so the detail-page bar must NOT
+      // mount on this affordance alone.
+      expect(shouldMountActionBar(a)).toBe(false);
+    });
+
+    it("false when every affordance is false (killing / planning)", () => {
+      const a: SessionAffordances = {
+        approve: false,
+        redirect: false,
+        kill: false,
+        dismiss: false,
+        undismiss: false,
+      };
+      expect(shouldMountActionBar(a)).toBe(false);
+    });
+  });
+
+  describe("shouldMountDismissButton (session-card island predicate)", () => {
+    it("true when dismiss is true (terminal + not dismissed)", () => {
+      const a: SessionAffordances = {
+        approve: false,
+        redirect: false,
+        kill: true,
+        dismiss: true,
+        undismiss: false,
+      };
+      expect(shouldMountDismissButton(a)).toBe(true);
+    });
+
+    it("true when undismiss is true (any row with dismissed_at set)", () => {
+      const a: SessionAffordances = {
+        approve: false,
+        redirect: false,
+        kill: false,
+        dismiss: false,
+        undismiss: true,
+      };
+      expect(shouldMountDismissButton(a)).toBe(true);
+    });
+
+    it("false on awaiting_review (neither dismiss nor undismiss)", () => {
+      const a: SessionAffordances = {
+        approve: true,
+        redirect: true,
+        kill: true,
+        dismiss: false,
+        undismiss: false,
+      };
+      expect(shouldMountDismissButton(a)).toBe(false);
+    });
+  });
 
   // Sanity: the table covers every SessionStatus value (8) × both
   // dismissed_at states (2) = 16 rows. If a new SessionStatus value

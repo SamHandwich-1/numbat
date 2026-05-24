@@ -14,6 +14,12 @@ import type { SessionStatus } from "@/lib/types/db";
 export type SessionFilters = {
   projectShortCode?: string;
   status?: SessionStatus;
+  // Slice 5 — when false-or-absent, listSessions filters `dismissed_at
+  // IS NULL` (the default Sessions-list view hides dismissed rows).
+  // When true, the filter is REMOVED entirely (no-filter, not IS NOT
+  // NULL, per docs/decisions/0009-slice-5-...md Stage 3: "operator
+  // wants to see everything when investigating").
+  includeDismissed?: boolean;
 };
 
 // Tailwind v4's @theme parser treats double-hyphens as modifier

@@ -36,6 +36,13 @@ export async function listSessions(
   if (filters.projectShortCode) {
     q = q.eq("projects.short_code", filters.projectShortCode);
   }
+  // Slice 5: default hides dismissed rows. The "show dismissed" toggle
+  // lifts the filter entirely (no `IS NOT NULL` — operator wants both
+  // dismissed and non-dismissed visible when investigating, per
+  // docs/decisions/0009-slice-5-...md Stage 3).
+  if (!filters.includeDismissed) {
+    q = q.is("dismissed_at", null);
+  }
 
   const { data, error } = await q.returns<SessionWithProject[]>();
   if (error) throw new Error(`listSessions: ${error.message}`);

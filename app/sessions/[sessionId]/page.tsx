@@ -32,6 +32,10 @@ import { SessionStatusSubscriber } from "@/components/review/session-status-subs
 import { ProjectChip } from "@/components/sessions/project-chip";
 import { RelativeTime } from "@/components/sessions/relative-time";
 import { getMockedOutputForSession } from "@/lib/mock/agent-sdk-output";
+import {
+  deriveSessionAffordances,
+  shouldMountActionBar,
+} from "@/lib/orchestration/affordances";
 import { ContextLoader } from "@/lib/orchestration/context";
 import { getSession } from "@/lib/supabase/queries/sessions";
 import { sbAdmin } from "@/lib/supabase/server";
@@ -88,6 +92,15 @@ export default async function SessionDetailPage({
   const statusVar = `var(${STATUS_TO_TOKEN[session.status]})`;
   const statusLabel = session.status.replace(/_/g, " ");
 
+  // Slice 5 step 4b: mount the ActionBar based on the affordances helper
+  // rather than a hardcoded status check. shouldMountActionBar covers
+  // approve||redirect||kill — the three "review" actions. dismiss /
+  // undismiss are deliberately NOT in the OR-list; they're list-only
+  // affordances in V1 per docs/decisions/0009-slice-5-...md §D, and
+  // surface only on the SessionCard's DismissButton island.
+  const affordances = deriveSessionAffordances(session);
+  const showActionBar = shouldMountActionBar(affordances);
+
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
       <SessionStatusSubscriber sessionId={session.id} />
@@ -128,9 +141,7 @@ export default async function SessionDetailPage({
           )}
           <DiffPreview diff={realDiff} />
 
-          {session.status === "awaiting_review" ? (
-            <ActionBar sessionId={session.id} skills={ctx.skills} />
-          ) : (
+          {TERMINAL_STATUSES.has(session.status) && (
             <TerminalBanner session={session} />
           )}
         </>
@@ -138,6 +149,10 @@ export default async function SessionDetailPage({
         <StoppingPlaceholder />
       ) : (
         <NotReadyPlaceholder statusLabel={statusLabel} />
+      )}
+
+      {showActionBar && (
+        <ActionBar session={session} skills={ctx.skills} affordances={affordances} />
       )}
     </main>
   );

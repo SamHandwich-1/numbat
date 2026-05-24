@@ -70,3 +70,30 @@ export function deriveSessionAffordances(
     undismiss: isDismissed,
   };
 }
+
+/**
+ * Detail-page ActionBar mount predicate. Slice 5 step 4b — the
+ * detail-page ActionBar exposes the three "review" affordances
+ * (approve/redirect/kill) but NOT dismiss/undismiss, which are
+ * list-only surfaces in V1 per docs/decisions/0009-slice-5-...md §D.
+ *
+ * Pure function over the affordances record; exported so the call site
+ * (app/sessions/[sessionId]/page.tsx) can mount conditionally and
+ * pure-unit tests can cover the OR-logic without React.
+ */
+export function shouldMountActionBar(affordances: SessionAffordances): boolean {
+  return affordances.approve || affordances.redirect || affordances.kill;
+}
+
+/**
+ * Session-card DismissButton mount predicate. The island renders when
+ * either dismiss or undismiss is valid; the two are mutually exclusive
+ * by construction (dismiss requires `dismissed_at IS NULL`; undismiss
+ * requires `IS NOT NULL`), so at most one of the two buttons can show
+ * per card.
+ */
+export function shouldMountDismissButton(
+  affordances: SessionAffordances,
+): boolean {
+  return affordances.dismiss || affordances.undismiss;
+}
