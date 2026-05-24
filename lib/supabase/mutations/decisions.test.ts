@@ -375,4 +375,168 @@ describe.skipIf(!haveCreds)("recordDecision state-machine (live DB)", () => {
       }),
     ).rejects.toThrow(/kill not valid/);
   });
+
+  // ───────────────────────────────────────────────────────────────────
+  // Slice 5 step 4a — dismiss / undismiss cases.
+  //   dismiss   (done | killed | blocked, dismissed_at NULL)
+  //                                  → dismissed_at=now(), status unchanged
+  //   dismiss   (not terminal,
+  //              or already dismissed) → throw
+  //   undismiss (dismissed_at NOT NULL) → dismissed_at=NULL, status unchanged
+  //   undismiss (not dismissed)         → throw
+  // ───────────────────────────────────────────────────────────────────
+
+  test("dismiss on a terminal session (done) populates dismissed_at and records the decision with session_label snapshot", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const SLICE_NAME = "dismiss-test-session";
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      slice_name: SLICE_NAME,
+      status: "done",
+    });
+
+    const decision = await recordDecision(sbAdmin, {
+      sessionId: session_id,
+      type: "dismiss",
+      payload: { type: "dismiss", session_label: SLICE_NAME },
+    });
+
+    expect(decision.type).toBe("dismiss");
+    expect((decision.payload as { session_label?: string }).session_label).toBe(
+      SLICE_NAME,
+    );
+
+    const { data: row } = await sbAdmin
+      .from("sessions")
+      .select("status, dismissed_at")
+      .eq("id", session_id)
+      .single();
+    expect(row?.status).toBe("done"); // unchanged
+    expect(row?.dismissed_at).not.toBeNull();
+  });
+
+  test("dismiss on awaiting_review → throws (not terminal)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "awaiting_review",
+    });
+
+    await expect(
+      recordDecision(sbAdmin, {
+        sessionId: session_id,
+        type: "dismiss",
+        payload: { type: "dismiss" },
+      }),
+    ).rejects.toThrow(/dismiss not valid/);
+  });
+
+  test("dismiss on already-dismissed session → throws (guard violation)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "done",
+      dismissed_at: new Date().toISOString(),
+    });
+
+    await expect(
+      recordDecision(sbAdmin, {
+        sessionId: session_id,
+        type: "dismiss",
+        payload: { type: "dismiss" },
+      }),
+    ).rejects.toThrow(/already dismissed/);
+  });
+
+  test("undismiss on a dismissed session clears dismissed_at and records the decision", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const SLICE_NAME = "undismiss-test-session";
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      slice_name: SLICE_NAME,
+      status: "killed",
+      dismissed_at: new Date().toISOString(),
+    });
+
+    const decision = await recordDecision(sbAdmin, {
+      sessionId: session_id,
+      type: "undismiss",
+      payload: { type: "undismiss", session_label: SLICE_NAME },
+    });
+
+    expect(decision.type).toBe("undismiss");
+    expect((decision.payload as { session_label?: string }).session_label).toBe(
+      SLICE_NAME,
+    );
+
+    const { data: row } = await sbAdmin
+      .from("sessions")
+      .select("status, dismissed_at")
+      .eq("id", session_id)
+      .single();
+    expect(row?.status).toBe("killed"); // unchanged
+    expect(row?.dismissed_at).toBeNull();
+  });
+
+  test("undismiss on a not-dismissed session → throws (guard violation)", async () => {
+    const { sbAdmin } = await import("@/lib/supabase/server");
+    const { recordDecision } = await import(
+      "@/lib/supabase/mutations/decisions"
+    );
+    const { insertProjectFixture, insertSessionFixture } = await import(
+      "@/lib/supabase/test-fixtures"
+    );
+
+    const project_id = await insertProjectFixture(sbAdmin);
+    insertedProjectIds.push(project_id);
+    const session_id = await insertSessionFixture(sbAdmin, {
+      project_id,
+      status: "done",
+      // dismissed_at defaults to null
+    });
+
+    await expect(
+      recordDecision(sbAdmin, {
+        sessionId: session_id,
+        type: "undismiss",
+        payload: { type: "undismiss" },
+      }),
+    ).rejects.toThrow(/not dismissed/);
+  });
 });

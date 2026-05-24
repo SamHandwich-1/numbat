@@ -4,14 +4,16 @@
 // spine 3 (Dismiss UI) both consume this helper; see 0009 §B/§C for
 // the design call.
 //
-// SYNC: the kill/approve/redirect rules below mirror the guards in
-// lib/supabase/mutations/decisions.ts:recordDecision. If either set of
-// rules changes, both must update together. The duplication is a
-// deliberate scope concession in Slice 5 — consolidation (refactor
-// recordDecision to consume this helper) is on the Slice 5 close-out's
-// carried-forward list. Drift between the two is a UI/backend skew
-// that's hard to debug; the SYNC comment exists to be a breadcrumb in
-// code review.
+// SYNC: this helper enumerates rules for TWO pairs of operator actions
+// that mirror guards in lib/supabase/mutations/decisions.ts:recordDecision:
+//   - approve/redirect/kill (since step 3)
+//   - dismiss/undismiss     (since step 4a)
+// If either rule set changes here, recordDecision must update in
+// lock-step, and vice versa. The duplication is a deliberate scope
+// concession in Slice 5 — consolidation (refactor recordDecision to
+// consume this helper) is on the Slice 5 close-out's carried-forward
+// list. Drift between the two is a UI/backend skew that's hard to
+// debug; this comment exists to be a breadcrumb in code review.
 
 import type { Session } from "@/lib/types/db";
 

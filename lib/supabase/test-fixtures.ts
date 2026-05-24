@@ -43,6 +43,7 @@ export async function insertSessionFixture(
     slice_name: string;
     task: string;
     status: SessionStatus;
+    dismissed_at: string | null;
   }>,
 ): Promise<string> {
   const { data, error } = await db
@@ -58,6 +59,7 @@ export async function insertSessionFixture(
       spec_id: null,
       agent_session_id: null,
       last_error: null,
+      dismissed_at: args.dismissed_at ?? null,
     })
     .select("id")
     .single();

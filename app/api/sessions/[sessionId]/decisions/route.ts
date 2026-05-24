@@ -22,7 +22,7 @@ import { sbAdmin } from "@/lib/supabase/server";
 import { DecisionPayload } from "@/lib/types/jsonb";
 
 const DecisionRequest = z.object({
-  type: z.enum(["approve", "redirect", "kill"]),
+  type: z.enum(["approve", "redirect", "kill", "dismiss", "undismiss"]),
   payload: DecisionPayload,
   context: z.string().trim().min(1).max(5000).optional(),
 });

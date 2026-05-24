@@ -139,6 +139,32 @@ describe("DecisionPayload (Slice 5 snapshot fields)", () => {
       }).success,
     ).toBe(true);
   });
+
+  // Step 4a additions: dismiss / undismiss. Both carry the snapshot
+  // fields uniformly and no other payload. Backward case here means
+  // "no snapshot fields" — the variants themselves are new, so the
+  // backward/forward asymmetry is about whether the snapshot fields
+  // are supplied, identical in shape to the four step-1 variants.
+
+  it("dismiss — backward compat (no snapshot fields) parses", () => {
+    expect(DecisionPayload.safeParse({ type: "dismiss" }).success).toBe(true);
+  });
+
+  it("dismiss — forward compat (with both snapshot fields) parses", () => {
+    expect(
+      DecisionPayload.safeParse({ type: "dismiss", ...SNAPSHOT_BOTH }).success,
+    ).toBe(true);
+  });
+
+  it("undismiss — backward compat parses", () => {
+    expect(DecisionPayload.safeParse({ type: "undismiss" }).success).toBe(true);
+  });
+
+  it("undismiss — forward compat (with both snapshot fields) parses", () => {
+    expect(
+      DecisionPayload.safeParse({ type: "undismiss", ...SNAPSHOT_BOTH }).success,
+    ).toBe(true);
+  });
 });
 
 describe("SessionLastError", () => {

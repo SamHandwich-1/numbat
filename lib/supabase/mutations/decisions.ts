@@ -11,43 +11,75 @@ import {
   type SessionLastErrorT,
 } from "@/lib/types/jsonb";
 
-// The subset of DecisionType this mutation handles. start_work,
-// accept_critique, etc. flow through their own helpers.
-export type ReviewDecisionType = "approve" | "redirect" | "kill";
+// SYNC: the kill/approve/redirect AND dismiss/undismiss guards below
+// mirror the rules in lib/orchestration/affordances.ts:deriveSessionAffordances.
+// Two pairs:
+//   - approve/redirect/kill (since step 3)
+//   - dismiss/undismiss     (since step 4a)
+// If either rule set changes here, the affordances helper must update
+// in lock-step, and vice versa. The duplication is a deliberate scope
+// concession in Slice 5 — consolidation (refactor recordDecision to
+// consume the helper) is on the Slice 5 close-out's carried-forward
+// list. Drift between the two is a UI/backend skew that's hard to
+// debug; this comment exists to be a breadcrumb in code review.
+
+// Operator actions that go through recordDecision:
+//   review actions:    approve, redirect, kill (since Slice 3)
+//   lifecycle actions: dismiss, undismiss      (since Slice 5 step 4a)
+// All five share the same write shape: insert a decisions row, then
+// apply the matching side-effect on sessions. recordDecision is the
+// single entry point. start_work, accept_critique, etc. flow through
+// their own helpers.
+export type OperatorDecisionType =
+  | "approve"
+  | "redirect"
+  | "kill"
+  | "dismiss"
+  | "undismiss";
 
 export type RecordDecisionInput = {
   sessionId: string;
-  type: ReviewDecisionType;
+  type: OperatorDecisionType;
   payload: DecisionPayloadT;
   context?: string | null;
 };
 
 /**
- * Record an operator's review decision (Approve / Redirect / Kill)
- * and apply the matching session-status change in one helper.
+ * Record an operator's decision (review or lifecycle) and apply the
+ * matching session-row change in one helper.
  *
- * Status transitions (plan §2, two-phase kill):
- *   approve  (awaiting_review)  → status='done',   completed_at=now()
- *   redirect (awaiting_review)  → session row UNCHANGED (plan §8 Q1 = A)
- *   kill     (idle | running)   → status='killing' (transient — worker
- *                                  writes terminal 'killed' on teardown)
- *   kill     (awaiting_review |
- *             blocked)          → status='killed' DIRECT, completed_at,
- *                                  last_error (no live worker to coord)
- *   kill     (killing | done |
- *             killed)           → THROW (kill already in flight or terminal)
+ * Status transitions and side-effects:
+ *   approve   (awaiting_review)        → status='done', completed_at=now()
+ *   redirect  (awaiting_review)        → session row UNCHANGED (plan §8 Q1 = A)
+ *   kill      (idle | running)         → status='killing' (transient — worker
+ *                                         writes terminal 'killed' on teardown)
+ *   kill      (awaiting_review |       → status='killed' DIRECT, completed_at,
+ *              blocked)                  last_error (no live worker to coord)
+ *   kill      (killing | done |        → THROW (kill already in flight or terminal)
+ *              killed)
+ *   dismiss   (done | killed | blocked → dismissed_at=now() (UPDATE only; status
+ *              with dismissed_at NULL)   unchanged)
+ *   undismiss (any status with         → dismissed_at=NULL (UPDATE only; status
+ *              dismissed_at NOT NULL)    unchanged)
  *
  * Two writes are non-atomic. Decision INSERT first (the audit log is
  * canonical even if the subsequent session UPDATE fails). If the
  * update fails after the decision lands, the session stays in its
  * prior state and the operator can retry. Single-operator V1
- * concession; matches the create-session.ts atomicity stance.
+ * concession; matches the create-session.ts atomicity stance. The
+ * dismiss/undismiss branches inherit this concession — failed UPDATE
+ * means the operator re-clicks. Atomicity (Postgres function wrapping
+ * both writes) is on the Slice 5 close-out's carried-forward list
+ * for V2 router-training data integrity.
  *
  * Guards:
  *   - approve / redirect — session must be in 'awaiting_review'.
  *   - kill — session must NOT be terminal (done/killed) or already
  *     in-flight (killing). Valid source states: idle / running /
  *     awaiting_review / blocked.
+ *   - dismiss — session must be terminal (done/killed/blocked) AND
+ *     dismissed_at must be NULL.
+ *   - undismiss — dismissed_at must be NOT NULL (any status).
  *   - DecisionPayload re-parsed defensively (route handler already
  *     parses; this is belt-and-braces).
  *   - payload.type must match the typed `type` field.
@@ -56,11 +88,11 @@ export async function recordDecision(
   db: SupabaseClient<Database>,
   input: RecordDecisionInput,
 ): Promise<Decision> {
-  // Load the session — need project_id (FK on decisions) and status
-  // (guard).
+  // Load the session — need project_id (FK on decisions), status
+  // (review/kill guards), and dismissed_at (dismiss/undismiss guards).
   const { data: session, error: sessionError } = await db
     .from("sessions")
-    .select("id, project_id, status")
+    .select("id, project_id, status, dismissed_at")
     .eq("id", input.sessionId)
     .maybeSingle();
   if (sessionError) {
@@ -70,10 +102,11 @@ export async function recordDecision(
     throw new Error(`recordDecision: session ${input.sessionId} not found`);
   }
 
-  // Type-specific status guards. Approve / Redirect require
-  // awaiting_review; Kill is valid on any non-terminal-non-in-flight
-  // state. Throws keep the message containing 'awaiting_review' for
-  // the approve/redirect paths (existing test expectations).
+  // Type-specific guards. Approve / Redirect require awaiting_review;
+  // Kill is valid on any non-terminal-non-in-flight state; Dismiss is
+  // valid on terminal rows that aren't yet dismissed; Undismiss is
+  // valid on any dismissed row. Throws keep the message wording
+  // tested by existing/new test expectations.
   if (input.type === "approve" || input.type === "redirect") {
     if (session.status !== "awaiting_review") {
       throw new Error(
@@ -81,8 +114,7 @@ export async function recordDecision(
           `got ${session.status}`,
       );
     }
-  } else {
-    // input.type === "kill"
+  } else if (input.type === "kill") {
     const validKillStates: SessionStatus[] = [
       "idle",
       "running",
@@ -93,6 +125,28 @@ export async function recordDecision(
       throw new Error(
         `recordDecision: kill not valid from status ${session.status} ` +
           `(must be one of ${validKillStates.join(", ")})`,
+      );
+    }
+  } else if (input.type === "dismiss") {
+    const validDismissStates: SessionStatus[] = ["done", "killed", "blocked"];
+    if (!validDismissStates.includes(session.status as SessionStatus)) {
+      throw new Error(
+        `recordDecision: dismiss not valid from status ${session.status} ` +
+          `(must be one of ${validDismissStates.join(", ")})`,
+      );
+    }
+    if (session.dismissed_at !== null) {
+      throw new Error(
+        `recordDecision: dismiss requires dismissed_at IS NULL, ` +
+          `but session is already dismissed`,
+      );
+    }
+  } else {
+    // input.type === "undismiss"
+    if (session.dismissed_at === null) {
+      throw new Error(
+        `recordDecision: undismiss requires dismissed_at IS NOT NULL, ` +
+          `but session is not dismissed`,
       );
     }
   }
@@ -169,6 +223,31 @@ export async function recordDecision(
       await transitionToKilledDirectly(db, session.id, {
         last_error: lastError,
       });
+    }
+  } else if (input.type === "dismiss") {
+    // status unchanged; only dismissed_at flips. current_step preserved
+    // (the row is already terminal so snapshot semantics apply).
+    const { error } = await db
+      .from("sessions")
+      .update({
+        dismissed_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("id", session.id);
+    if (error) {
+      throw new Error(`recordDecision: dismiss session update — ${error.message}`);
+    }
+  } else if (input.type === "undismiss") {
+    // Reverse of dismiss. status unchanged.
+    const { error } = await db
+      .from("sessions")
+      .update({
+        dismissed_at: null,
+        updated_at: nowIso,
+      })
+      .eq("id", session.id);
+    if (error) {
+      throw new Error(`recordDecision: undismiss session update — ${error.message}`);
     }
   }
   // redirect: no session UPDATE (plan §8 Q1 = A).

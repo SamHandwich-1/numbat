@@ -88,6 +88,12 @@ export const SpecOpenQuestions = z.array(
 // edit_spec) are Bilby-pipeline-related and don't yet appear in live
 // decision rows per Step 0a §A's sample. They're left unextended for
 // now; extend them when a Bilby flow produces snapshot-relevant rows.
+//
+// Slice 5 step 4a — two new variants. `dismiss` and `undismiss` are
+// operator lifecycle actions surfaced via the Slice 5 dismiss UI (0009
+// §D). Both carry the snapshot fields uniformly; no additional payload
+// (dismiss is low-stakes, so no reason field is required — easy to add
+// later if the audit value of a reason proves useful).
 const DecisionSnapshotFields = {
   session_label: z.string().optional(),
   plan_label: z.string().optional(),
@@ -131,6 +137,14 @@ export const DecisionPayload = z.discriminatedUnion("type", [
       "manual",
     ]),
     reason: z.string(),
+    ...DecisionSnapshotFields,
+  }),
+  z.object({
+    type: z.literal("dismiss"),
+    ...DecisionSnapshotFields,
+  }),
+  z.object({
+    type: z.literal("undismiss"),
     ...DecisionSnapshotFields,
   }),
 ]);
