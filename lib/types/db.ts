@@ -95,16 +95,23 @@ export type Session = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  // Slice 5: soft-hide marker for terminal rows. Sessions list filters
+  // `dismissed_at IS NULL` by default; "show dismissed" toggle removes
+  // the filter. Reversible via UPDATE sessions SET dismissed_at = NULL.
+  // Added by migration 0007. See
+  // docs/decisions/0009-slice-5-operator-action-surface-session-lifecycle.md §D.
+  dismissed_at: string | null;
 };
 export type SessionInsert = Omit<
   Session,
-  "id" | "created_at" | "updated_at" | "completed_at" | "diff"
+  "id" | "created_at" | "updated_at" | "completed_at" | "diff" | "dismissed_at"
 > & {
   id?: string;
   created_at?: string;
   updated_at?: string;
   completed_at?: string | null;
   diff?: WorktreeDiffT | null;
+  dismissed_at?: string | null;
 };
 
 export type Plan = {
