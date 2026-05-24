@@ -164,6 +164,8 @@ export async function transitionToBlocked(
   SessionLastError.parse(args.last_error);
   const expected: SessionStatus[] = ["idle", "running", "killing"];
   const nowIso = new Date().toISOString();
+  // current_step is deliberately NOT cleared here — snapshot-style
+  // semantics per docs/decisions/0010-current-step-on-terminal-transitions.md.
   const { matched, error } = await guardedUpdate(db, sessionId, expected, {
     status: "blocked",
     last_error: args.last_error,
@@ -215,6 +217,8 @@ export async function transitionToKilled(
 ): Promise<void> {
   const expected: SessionStatus[] = ["killing"];
   const nowIso = new Date().toISOString();
+  // current_step is deliberately NOT cleared here — snapshot-style
+  // semantics per docs/decisions/0010-current-step-on-terminal-transitions.md.
   const { matched, error } = await guardedUpdate(db, sessionId, expected, {
     status: "killed",
     completed_at: nowIso,
@@ -240,6 +244,8 @@ export async function transitionToKilledDirectly(
   SessionLastError.parse(args.last_error);
   const expected: SessionStatus[] = ["awaiting_review", "blocked"];
   const nowIso = new Date().toISOString();
+  // current_step is deliberately NOT cleared here — snapshot-style
+  // semantics per docs/decisions/0010-current-step-on-terminal-transitions.md.
   const { matched, error } = await guardedUpdate(db, sessionId, expected, {
     status: "killed",
     completed_at: nowIso,

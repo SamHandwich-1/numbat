@@ -131,6 +131,8 @@ export async function recordDecision(
   // Apply the session-status change.
   const nowIso = new Date().toISOString();
   if (input.type === "approve") {
+    // current_step is deliberately NOT cleared on the done transition —
+    // snapshot-style semantics per docs/decisions/0010-current-step-on-terminal-transitions.md.
     const { error } = await db
       .from("sessions")
       .update({
@@ -152,6 +154,10 @@ export async function recordDecision(
       occurred_at: nowIso,
     };
 
+    // current_step is deliberately NOT cleared by either branch below —
+    // snapshot-style semantics per docs/decisions/0010-current-step-on-terminal-transitions.md.
+    // The transitionToKilling / transitionToKilledDirectly helpers
+    // preserve current_step in their own UPDATE statements.
     // Two-phase kill (plan §2): branch on current status.
     if (session.status === "idle" || session.status === "running") {
       // Live worker — write transient 'killing'. Worker tears down

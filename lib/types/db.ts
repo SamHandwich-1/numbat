@@ -81,6 +81,8 @@ export type Session = {
   worktree_path: string | null;
   task: string;
   status: SessionStatus;
+  // Live during running/idle (worker's most recent tool-use file path);
+  // snapshot once terminal — see docs/decisions/0010-current-step-on-terminal-transitions.md.
   current_step: string | null;
   blocking_reason: string | null;
   spec_id: string | null;
