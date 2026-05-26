@@ -1,4 +1,5 @@
 import type {
+  DebriefContentT,
   DecisionPayloadT,
   LlmCallErrorT,
   PlanStageContentT,
@@ -52,7 +53,20 @@ export type DecisionType =
   | "edit_spec"
   | "start_work"
   | "dismiss"
-  | "undismiss";
+  | "undismiss"
+  // Slice 6 sub-slice 6a: extended via migration 0009 to match the
+  // 11-value SQL check constraint. Three-place sync (SQL constraint,
+  // TS union, Zod DecisionPayload variant) — see jsonb.ts for the
+  // matching stub variant. 6g extends the Zod variant with create_plan-
+  // specific fields when wiring lib/orchestration/create-plan.ts.
+  | "create_plan";
+
+export type DebriefType =
+  | "direct"
+  | "bilby_draft"
+  | "bilby_critique"
+  | "bilby_consider"
+  | "bilby_validate";
 
 export type LlmProvider = "anthropic" | "xai" | "agent_sdk";
 
@@ -202,6 +216,30 @@ export type SkillInsert = Omit<
   usage_count?: number;
 };
 
+// Debrief — written at the end of every Direct session (and, from Slice 7,
+// at each Bilby stage). `debrief_type` discriminates the `content` shape;
+// the inferred `DebriefContentT` is currently the 'direct' four-section
+// schema from jsonb.ts. Gate 4 generalises `content` to a discriminated
+// union including the four bilby_* arms (currently TODO stubs). Per
+// migration 0009. At least one of session_id / plan_stage_id is set
+// (debriefs_target_check).
+export type Debrief = {
+  id: string;
+  project_id: string;
+  session_id: string | null;
+  plan_stage_id: string | null;
+  debrief_type: DebriefType;
+  content: DebriefContentT;
+  llm_call_id: string | null;
+  prompt_version: string;
+  duration_ms: number | null;
+  created_at: string;
+};
+export type DebriefInsert = Omit<Debrief, "id" | "created_at"> & {
+  id?: string;
+  created_at?: string;
+};
+
 // LlmCall — note cost_usd is `string` because numeric(10,6) is delivered as
 // string by the postgrest JSON encoder (avoids JS number precision loss).
 // Convert at the boundary via Number(row.cost_usd).
@@ -253,6 +291,7 @@ export type Database = {
       decisions: TableShape<Decision, DecisionInsert>;
       skills: TableShape<Skill, SkillInsert>;
       llm_calls: TableShape<LlmCall, LlmCallInsert>;
+      debriefs: TableShape<Debrief, DebriefInsert>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

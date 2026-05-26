@@ -147,6 +147,17 @@ export const DecisionPayload = z.discriminatedUnion("type", [
     type: z.literal("undismiss"),
     ...DecisionSnapshotFields,
   }),
+  // Slice 6 sub-slice 6a — minimum-viable stub variant to keep the
+  // three-place sync (SQL constraint 0009, TS DecisionType union,
+  // Zod DecisionPayload variant) intact after `create_plan` joined
+  // the constraint. 6g extends with create_plan-specific fields
+  // (`source: 'start_work' | 'operator_initiated'`, optional
+  // `routed_to`/`matched_rule`/`reason` when source is `start_work`)
+  // when wiring lib/orchestration/create-plan.ts.
+  z.object({
+    type: z.literal("create_plan"),
+    ...DecisionSnapshotFields,
+  }),
 ]);
 
 // llm_calls.error — populated when a call failed
