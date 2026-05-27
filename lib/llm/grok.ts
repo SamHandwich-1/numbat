@@ -63,6 +63,32 @@ function is4xx(err: unknown): boolean {
   return typeof status === "number" && status >= 400 && status < 500;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Slice 7 (Bilby) — NOT YET WIRED. The critique and validate stages run
+// here, mirroring lib/llm/opus.ts's callOpusObject as `callGrokObject`:
+// schema + stable prefix (cache-eligible via xai providerOptions when xAI
+// publishes prompt caching; see the cacheRead/cacheWrite placeholder note
+// in lib/supabase/llm-calls.ts) + per-call dynamic suffix + 60s timeout
+// + structured logging through the same pino instance.
+//
+// Expected schemas:
+//
+//   const CritiqueSchema = z.object({
+//     critique_markdown: z.string(),
+//     gaps: z.array(z.string()),
+//     verdict: z.enum(["accept", "redirect", "reject"]),
+//   });
+//
+//   const ValidateSchema = z.object({
+//     ready: z.boolean(),
+//     blockers: z.array(z.string()),
+//     notes_markdown: z.string(),
+//   });
+//
+// Slice 6 only needs Anthropic per 0013 §2 "Out (deferred to Slice 7)";
+// callGrokObject lands with the Slice 7 Bilby implementation.
+// ─────────────────────────────────────────────────────────────────────
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

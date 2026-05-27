@@ -72,7 +72,7 @@ Five layers:
 
 ## Resilience
 
-- **LLM call timeouts:** Opus draft 90s · Grok critique 60s · Opus considered 90s · Grok validate 60s · Opus debrief 60s. Agent SDK sessions have no timeout (kill via signal only).
+- **LLM call timeouts:** Opus draft 90s · Grok critique 60s · Opus considered 90s · Grok validate 60s · Opus debrief 90s. Agent SDK sessions have no timeout (kill via signal only).
 - **Retry:** Max 2 retries on network errors with exponential backoff (1s, 2s). No retry on 4xx responses.
 - **Failure modes:** An LLM call failure writes a row to `llm_calls` with `error` populated and updates the parent session/plan status. The UI shows the error inline; the loop fails open (the user can redirect or kill).
 - **Session worker crash:** The parent session row is marked `blocked` with `last_error` populated. The user is notified via realtime.
