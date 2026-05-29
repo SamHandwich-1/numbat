@@ -99,7 +99,7 @@ Why local-first: the Claude Agent SDK is local-execution-first by design — it 
 ## 6 · Tech stack
 
 - **Frontend:** Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui (Radix-based).
-- **State + realtime:** Supabase (Postgres + realtime subscriptions). RLS off in V1; single-user.
+- **State + realtime:** Supabase (Postgres + realtime subscriptions). RLS on with service_role bypass; permissive `using (true)` anon SELECT on the 5 realtime-published tables only; 4 server-only tables RLS-enabled with no anon policy. Single-user V1; tighten to per-user policies if/when multi-user lands. See `docs/decisions/0017-enable-rls-with-service-role-bypass.md`.
 - **Background workers:** Node child processes spawned per session (`scripts/session-runner.ts`). No external queue framework in V1.
 - **LLM abstraction:** Vercel AI SDK (`ai`, `@ai-sdk/anthropic`, `@ai-sdk/xai`) for Opus and Grok. Clean streaming, tool calls, provider swap.
 - **Claude Agent SDK:** `@anthropic-ai/claude-agent-sdk` (TypeScript). Bundles the Claude Code binary as an optional dependency; no separate Claude Code install required. CLAUDE.md delivery uses `settingSources: ['project']` per the SDK's filesystem-based configuration support. Cost data: `SDKResultSuccess` exposes `total_cost_usd` pre-computed plus per-model breakdown via `modelUsage`. We trust it; no maintained price table for the Agent SDK path. Bilby's direct Anthropic / xAI calls via the AI SDK do need a price table; that's deferred to the Bilby slice.

@@ -83,6 +83,7 @@ Five layers:
 - One user (James). Auth is a single hardcoded session token in `.env.local`. No user table, no roles.
 - Project list seeded from `config/projects.json`. No admin UI in V1.
 - `created_by` columns deferred. Migration to add later is a single ALTER TABLE per affected table — cheap. Adding speculatively now buys nothing.
+- RLS on, service_role bypasses. Permissive `using (true)` anon SELECT policies on the 5 realtime-published tables (`sessions`, `llm_calls`, `plan_stages`, `debriefs`, `decisions`); the other 4 public tables (`plans`, `projects`, `skills`, `specs`) are RLS-enabled with no anon policy by intent — server-only access via `sbAdmin`. "RLS Enabled No Policy" INFO notices on those four are expected; do not silence with a permissive policy. See `docs/decisions/0017-enable-rls-with-service-role-bypass.md`.
 
 ## Design system
 
