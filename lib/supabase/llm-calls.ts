@@ -180,7 +180,11 @@ export async function insertLlmCallsFromModelUsage(
 
 export type InsertLlmCallFromAiSdkResultInput = {
   project_id: string;
-  plan_stage_id: string;
+  // At least one of plan_stage_id / session_id must be non-null. The
+  // runtime check below enforces this; matches the debriefs_target_check
+  // pattern on the debriefs table (migration 0009 §5).
+  plan_stage_id?: string | null;
+  session_id?: string | null;
   provider: Extract<LlmProvider, "anthropic" | "xai">;
   model: string;
   usage: LanguageModelUsage;
@@ -192,10 +196,11 @@ export type InsertLlmCallFromAiSdkResultInput = {
 export async function insertLlmCallFromAiSdkResult(
   db: SupabaseClient<Database>,
   input: InsertLlmCallFromAiSdkResultInput,
-): Promise<void> {
+): Promise<{ id: string }> {
   const {
     project_id,
-    plan_stage_id,
+    plan_stage_id = null,
+    session_id = null,
     provider,
     model,
     usage,
@@ -203,6 +208,12 @@ export async function insertLlmCallFromAiSdkResult(
     prompt_hash = null,
     error = null,
   } = input;
+
+  if (plan_stage_id === null && session_id === null) {
+    throw new Error(
+      "insertLlmCallFromAiSdkResult: at least one of plan_stage_id or session_id must be non-null",
+    );
+  }
 
   if (error !== null) {
     LlmCallError.parse(error);
@@ -212,7 +223,7 @@ export async function insertLlmCallFromAiSdkResult(
   const row: LlmCallInsert = {
     project_id,
     plan_stage_id,
-    session_id: null,
+    session_id,
     provider,
     model,
     prompt_hash,
@@ -226,8 +237,13 @@ export async function insertLlmCallFromAiSdkResult(
     error,
   };
 
-  const { error: dbError } = await db.from("llm_calls").insert(row);
+  const { data, error: dbError } = await db
+    .from("llm_calls")
+    .insert(row)
+    .select("id")
+    .single();
   if (dbError) {
     throw new Error(`insertLlmCallFromAiSdkResult: ${dbError.message}`);
   }
+  return { id: data.id };
 }
