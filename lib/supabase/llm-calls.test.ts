@@ -274,4 +274,30 @@ describe("insertLlmCallFromAiSdkResult (mocked client)", () => {
     expect(row.cost_usd).toBe("0.000000");
     expect(row.model).toBe("claude-future-model-not-in-table");
   });
+
+  // Added in Slice 6c — closes the gap where 6b Gate 4 covered only the
+  // success shape. The debrief generator's failure path
+  // (lib/debrief/opus-debrief.ts:writeErrorLlmCall) relies on this
+  // behaviour: an OpusCallError surfaces as an llm_calls row with `error`
+  // populated and zero usage, so the audit trail still bills the failed
+  // attempt and the Diff & Review surface can render "no debrief
+  // generated — last attempt: <error_kind>".
+  test("(9) error input is Zod-parsed and persisted on the inserted row", async () => {
+    const { client, insertSpy } = makeMockClient();
+    const errInput = {
+      message: "Opus call failed: http_5xx",
+      subtype: "http_5xx",
+    };
+    await insertLlmCallFromAiSdkResult(client, {
+      ...baseInput,
+      session_id: "sess-9",
+      error: errInput,
+    });
+    const row = insertSpy.mock.calls[0]?.[0] as {
+      error: { message: string; subtype?: string } | null;
+      session_id: string | null;
+    };
+    expect(row.error).toEqual(errInput);
+    expect(row.session_id).toBe("sess-9");
+  });
 });

@@ -1,0 +1,73 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`opus-debrief prompt module > (snap-1) stable-prefix snapshot — CACHE-LOAD-BEARING; review diffs deliberately 1`] = `
+"You are Opus, generating a Numbat session debrief.
+
+A Numbat session is one run of the Claude Agent SDK against a project worktree, driven by a single task. Your job: produce a four-section structured debrief that the operator (James) reads in the Diff & Review surface.
+
+Output schema (strict — validated by Zod at the SDK boundary):
+
+  what_we_did              — single non-empty string. What the session actually did, grounded in the captured diff and message transcript. Past tense.
+  where_this_fits          — single non-empty string. How this work relates to the project's current slice, decisions, or specs. Cross-reference the project bundle.
+  why_it_matters           — single non-empty string. The honest "why" — what does this unblock, prevent, or clarify?
+  what_went_wrong_or_next  — single non-empty string. Anything that didn't go to plan, or the natural next step. Be specific.
+  new_concept (optional)   — { title, body }. Only include when this session genuinely introduced a new abstraction, term, or convention worth capturing for the project glossary. If nothing fits, omit the field entirely (do not include a placeholder).
+
+Rules:
+- Each of the four required strings is a single coherent paragraph (not a list, not a heading + body).
+- Ground every claim in the diff or the message transcript — do not invent.
+- Use the project bundle for context, not for content. The debrief is about this session, not the project at large.
+- If new_concept genuinely applies, the title is a short noun phrase (1–5 words); the body is 1–3 sentences defining it.
+
+## Project context (CLAUDE.md)
+# Project
+
+A test project for snapshot stability.
+
+## Active specs
+- spec-0001 — Ship slice 6c
+
+## Skills
+- snapshot-skill — for tests
+
+## Recent decisions (last 30)
+- 2026-05-26T10:00:00.000Z · approve (dec-0001)
+- 2026-05-26T11:00:00.000Z · start_work (dec-0002)"
+`;
+
+exports[`opus-debrief prompt module > (snap-2) dynamic-suffix snapshot — assistant text, tool_use summaries, diff totals, spec, prior debrief 1`] = `
+"## Session task
+Implement the Opus debrief generator at lib/debrief/opus-debrief.ts.
+
+## Session spec
+Goal: Ship slice 6c
+
+## Prior debrief (most recent for this session)
+{
+  "what_we_did": "drafted the prompt module",
+  "where_this_fits": "Slice 6c step 1",
+  "why_it_matters": "stable prefix unlocks Slice 7 cache hits",
+  "what_went_wrong_or_next": "next: wire the generator"
+}
+
+## Captured diff
+2 files changed, +125 / -3
+
+### added — lib/debrief/opus-debrief.ts  (+120 / -0)
+
+### modified — lib/types/debrief.ts  (+5 / -3)
+\`\`\`diff
+diff --git a/lib/types/debrief.ts b/lib/types/debrief.ts
+@@ -1,1 +1,1 @@
+-old line
++new line
+\`\`\`
+
+## Agent SDK message transcript
+[assistant] I'll start by reading the existing files.
+[tool_use: Read] lib/orchestration/context.ts
+[tool_use: Write] lib/debrief/opus-debrief.ts
+[assistant] Done — generator scaffolded.
+
+Now produce the debrief object. Strict schema; no commentary outside the object."
+`;
