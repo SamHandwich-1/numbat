@@ -275,11 +275,22 @@ export class ContextLoader {
   // No index on `specs.project_id` today — accept the seq-scan over a
   // small table (<10 rows in dev). Add an index in a later migration if
   // specs growth becomes a concern.
+  //
+  // ORDER BY created_at desc locks deterministic row order for the
+  // cache-stable prefix in `lib/llm/prompts/opus-debrief.ts` (and the
+  // Slice 7 Bilby stages that share the prefix shape): identical
+  // project state must produce identical prefix bytes across calls so
+  // Anthropic's 5-min-TTL prompt cache hits. Without this, Postgres
+  // can return specs in any physical order and the cache misses on
+  // every call. Do NOT strip — the seq-scan is fine; the in-memory
+  // sort over ≤10 rows is negligible. See `0019-loader-ordering-fix-
+  // for-cache-stability.md` for the full rationale.
   private async loadSpecs(projectId: string): Promise<Spec[]> {
     const { data, error } = await this.db
       .from("specs")
       .select("*")
-      .eq("project_id", projectId);
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false });
     if (error) {
       throw new Error(
         `ContextLoader: failed to load specs for project ${projectId}: ${error.message}`,

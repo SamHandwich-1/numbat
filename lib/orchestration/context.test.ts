@@ -469,6 +469,82 @@ describe("ContextLoader cross-project enforcement", () => {
     expect(tablesQueried).toEqual(["sessions"]);
   });
 
+  it("specs are returned in deterministic created_at desc order regardless of physical insertion order", async () => {
+    // The cache-stable prefix in lib/llm/prompts/opus-debrief.ts renders
+    // specs as a list — identical project state must produce identical
+    // prefix bytes across calls so Anthropic's 5-min-TTL prompt cache
+    // hits. Without an ORDER BY on loadSpecs, Postgres makes no row-
+    // order guarantee — two calls can return the same rows in different
+    // physical orders and the cache misses on every call.
+    //
+    // Two seeded mock clients with the same logical content but
+    // different physical row orders simulate that variance. A faithful
+    // loader (post-fix) canonicalises both to the same sequence; the
+    // unfixed loader (no ORDER BY) returns physical order, so the two
+    // builds produce different specs arrays and the first assertion
+    // below fails.
+    const specOld: Spec = {
+      id: "00000000-0000-0000-0000-0000000003a1",
+      project_id: projectA,
+      plan_id: null,
+      goal: "oldest spec",
+      out_of_scope: null,
+      files_affected: null,
+      acceptance_criteria: null,
+      open_questions: null,
+      version: 1,
+      created_at: "2026-05-10T00:00:00Z",
+    };
+    const specMid: Spec = {
+      ...specOld,
+      id: "00000000-0000-0000-0000-0000000003a2",
+      goal: "middle spec",
+      created_at: "2026-05-15T00:00:00Z",
+    };
+    const specNew: Spec = {
+      ...specOld,
+      id: "00000000-0000-0000-0000-0000000003a3",
+      goal: "newest spec",
+      created_at: "2026-05-20T00:00:00Z",
+    };
+
+    // Seed 1: middle, old, new — no chronology.
+    const db1 = mockClient({
+      sessions: [{ id: sessionInA, project_id: projectA, spec_id: null }],
+      projects: [{ id: projectA, claude_md: null }],
+      specs: [specMid, specOld, specNew],
+    });
+    // Seed 2: new, mid, old — different physical order, same logical content.
+    const db2 = mockClient({
+      sessions: [{ id: sessionInA, project_id: projectA, spec_id: null }],
+      projects: [{ id: projectA, claude_md: null }],
+      specs: [specNew, specMid, specOld],
+    });
+
+    const ctx1 = await new ContextLoader(db1).buildFor(
+      projectA,
+      "session",
+      sessionInA,
+    );
+    const ctx2 = await new ContextLoader(db2).buildFor(
+      projectA,
+      "session",
+      sessionInA,
+    );
+
+    // (1) Determinism across physical layouts — the cache-stability
+    // property. Pre-fix returns physical order (different between db1
+    // and db2) and this fails.
+    const ids1 = ctx1.specs.map((s: Spec) => s.id);
+    const ids2 = ctx2.specs.map((s: Spec) => s.id);
+    expect(ids1).toEqual(ids2);
+
+    // (2) Canonical order is created_at desc — newest first. Locks the
+    // chosen ordering semantic so a future "simplify" pass can't switch
+    // to created_at asc without breaking this test.
+    expect(ids1).toEqual([specNew.id, specMid.id, specOld.id]);
+  });
+
   it("caps recentDecisions at 30 rows ordered desc by created_at", async () => {
     // 35 decisions for project A with sequential created_at — the
     // loader's limit(30) must drop the five oldest and the order must
